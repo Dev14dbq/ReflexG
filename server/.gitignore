@@ -1,0 +1,41 @@
+# dependencies
+node_modules/
+
+# production build
+dist/
+build/
+
+# local env files
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# editor
+.vscode/
+.idea/
+
+# prisma
+prisma/migrations/
+
+# temporary
+tmp/
+temp/
+
+# lock files (если не хочешь их коммитить)
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+/generated/prisma
