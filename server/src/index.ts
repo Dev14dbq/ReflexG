@@ -1,8 +1,12 @@
 // src/index.ts
 import express from 'express';
+import dotenv from 'dotenv';
+
+// Загружаем .env
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
 app.get('/ping', (_req, res) => {
   res.send('pong');
