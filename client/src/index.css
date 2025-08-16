@@ -1,34 +1,21 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --color-bg: #ffffff; /* white */
+  --color-fg: #1b1b1b; /* near black for text */
+  --color-muted: #b0b0b0;
+  --color-accent: #769784; /* requested dark gray-green for light theme */
+  --color-accent-2: #769784; /* same family for borders/underlines */
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+.dark:root {
+  --color-bg: #000000; /* black */
+  --color-fg: #ffffff; /* white */
+  --color-muted: #999999;
+  --color-accent: #ff9ff3; /* requested accent in dark */
+  --color-accent-2: #ff9ff3;
 }
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--color-bg); color: var(--color-fg); }
 
 h1 {
   font-size: 3.2em;
@@ -53,6 +40,29 @@ button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
+
+/* Minimal components */
+.btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; border-radius: 0.375rem; border-width: 1px; transition: all .15s; border-color: color-mix(in oklab, var(--color-accent) 30%, transparent); color: var(--color-fg); }
+.btn:hover { border-color: var(--color-accent); }
+.btn-primary { background: var(--color-accent); color: #fff; }
+.btn-primary:hover { filter: brightness(0.95); }
+
+.input { width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.375rem; outline: none; background: color-mix(in oklab, var(--color-bg) 95%, var(--color-accent) 5%); border: 1px solid color-mix(in oklab, var(--color-accent) 30%, transparent); color: var(--color-fg); }
+.input:focus { border-color: var(--color-accent); box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 30%, transparent); }
+
+.label { font-size: 0.875rem; color: color-mix(in oklab, var(--color-fg) 70%, var(--color-muted) 30%); }
+
+.card { border-radius: 0.75rem; padding: 1rem; border: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent); }
+
+.divider { height: 1px; background: color-mix(in oklab, var(--color-accent) 15%, transparent); }
+
+.link { color: var(--color-accent); text-decoration: none; }
+.link:hover { text-decoration: underline; }
+
+/* Utility helpers */
+.text-muted { color: color-mix(in oklab, var(--color-fg) 50%, var(--color-muted) 50%); }
+.border-accent { border-color: var(--color-accent); }
+.underline-accent { text-decoration-color: var(--color-accent); }
 
 @media (prefers-color-scheme: light) {
   :root {

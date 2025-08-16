@@ -13,3 +13,136 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ================ Enums ================
+
+enum GenderIdentity {
+  GAY
+  LESBIAN
+  BISEXUAL
+  PANSEXUAL
+  QUEER
+  ASEXUAL
+}
+
+enum Sex {
+  MALE
+  FEMALE
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ModerationItemType {
+  INITIAL
+  PROFILE_DESCRIPTION
+  PROFILE_EDIT
+  PHOTOS
+}
+
+enum LookingFor {
+  LONG_DISTANCE   // Отношения на расстоянии
+  LOCAL           // Отношения локальные
+  SEX             // Секс (с 16 лет)
+  COMMUNICATION   // Общение
+  EXCHANGE        // Обмен (с 14 лет)
+}
+
+// ================ Models ================
+
+model User {
+  telegramId   BigInt   @id @db.BigInt
+  username     String?  @db.VarChar(64)
+  firstName    String?  @db.VarChar(64)
+  lastName     String?  @db.VarChar(64)
+  languageCode String?  @db.VarChar(8)
+  isPremium    Boolean?
+  photoUrl     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile      Profile?
+  photos       Photo[]
+  moderations  ModerationItem[]
+}
+
+model Profile {
+  userId  BigInt  @id @db.BigInt
+  user    User    @relation(fields: [userId], references: [telegramId], onDelete: Cascade)
+
+  city        String?         @db.VarChar(128)
+  displayName String?         @db.VarChar(32)
+  birthDate   DateTime?
+  gender      GenderIdentity?
+  sex         Sex?
+
+  description String?         @db.Text
+  consentAcceptedAt DateTime?
+
+  heightCm    Int?
+  weightKg    Int?
+  wandSizeCm  Int?
+
+  // Одобренные выборы "Что ищу"
+  lookingFor  ProfileLookingFor[]
+
+  // Модерация первичной анкеты
+  initialModerationStatus ModerationStatus @default(PENDING)
+  initialModerationNote   String?          @db.Text
+
+  // Модерация описания/доп. данных
+  descriptionModerationStatus ModerationStatus @default(PENDING)
+  descriptionModerationNote   String?          @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Photo {
+  id        String   @id @default(cuid())
+  userId    BigInt   @db.BigInt
+  user      User     @relation(fields: [userId], references: [telegramId], onDelete: Cascade)
+  url       String
+  position  Int      // 0..2, строго уникальна на пользователя
+  status    ModerationStatus @default(PENDING)
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@unique([userId, position])
+}
+
+// Одобренные опции "Что ищу" для профиля
+model ProfileLookingFor {
+  profileId BigInt       @db.BigInt
+  profile   Profile      @relation(fields: [profileId], references: [userId], onDelete: Cascade)
+  option    LookingFor
+
+  @@id([profileId, option])
+}
+
+// Очередь модерации: хранит изменяемые данные (в т.ч. первичную регистрацию, фото и правки)
+model ModerationItem {
+  id         String            @id @default(cuid())
+  userId     BigInt            @db.BigInt
+  user       User              @relation(fields: [userId], references: [telegramId], onDelete: Cascade)
+  type       ModerationItemType
+  status     ModerationStatus  @default(PENDING)
+  payload    Json              // произвольный JSON с предлагаемыми изменениями
+  createdAt  DateTime          @default(now())
+  resolvedAt DateTime?
+  reason     String?           @db.Text
+
+  @@index([userId, status, type])
+}
+
+// Справочник совместимостей гендеров для алгоритма метчинга
+model GenderCompatibility {
+  from GenderIdentity
+  to   GenderIdentity
+
+  @@id([from, to])
+}
+
