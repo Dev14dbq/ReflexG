@@ -2,8 +2,9 @@ import type { JSX } from 'react'
 
 function openTelegramChannel(url: string): void {
   try {
-    if (window?.Telegram?.WebApp?.openTelegramLink) {
-      window.Telegram.WebApp.openTelegramLink(url)
+    const anyWin = window as any
+    if (anyWin?.Telegram?.WebApp?.openTelegramLink) {
+      anyWin.Telegram.WebApp.openTelegramLink(url)
       return
     }
   } catch {}
@@ -12,37 +13,11 @@ function openTelegramChannel(url: string): void {
 
 export default function PendingModerationPage(): JSX.Element {
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden">
-      {/* фон с рябью */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: `
-            radial-gradient(circle at 20% 30%, rgba(255,255,255,0.08) 2px, transparent 0),
-            radial-gradient(circle at 70% 60%, rgba(255,255,255,0.06) 3px, transparent 0),
-            radial-gradient(circle at 40% 80%, rgba(255,255,255,0.1) 2px, transparent 0)
-          `,
-          backgroundSize: '60px 60px',
-          filter: 'blur(6px) contrast(120%)',
-          zIndex: 0,
-        }}
-      />
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: `
-            radial-gradient(circle at 10% 20%, rgba(255,255,255,0.15) 2px, transparent 0),
-            radial-gradient(circle at 80% 40%, rgba(255,255,255,0.1) 3px, transparent 0),
-            radial-gradient(circle at 50% 70%, rgba(255,255,255,0.12) 2px, transparent 0)
-          `,
-          backgroundSize: '50px 50px',
-          zIndex: 1,
-        }}
-      />
+    <div className="min-h-screen flex flex-col bg-ripple">
 
       <div
         className="flex-1 flex items-center justify-center px-4 relative"
-        style={{ transform: 'translateY(-8%)', zIndex: 2 }}
+        style={{ transform: 'translateY(-8%)' }}
       >
         <div className="w-full max-w-md text-center">
           <div className="text-2xl font-semibold">Анкета на модерации</div>

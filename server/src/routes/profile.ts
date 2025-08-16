@@ -20,6 +20,16 @@ const SubmitBaseProfileDto = z.object({
 })
 
 const GetStatusDto = z.object({ initData: z.string().min(1) })
+const LookingForEnum = z.enum(['LONG_DISTANCE','LOCAL','SEX','COMMUNICATION','EXCHANGE'])
+const SubmitDetailsDto = z.object({
+  initData: z.string().min(1),
+  description: z.string().min(24).max(1200),
+  consentAccepted: z.literal(true),
+  lookingFor: z.array(LookingForEnum).max(5).optional().default([]),
+  heightCm: z.number().int().min(130).max(220).optional(),
+  weightKg: z.number().int().min(30).max(300).optional(),
+  wandSizeCm: z.number().int().min(3).max(30).optional(),
+})
 
 // ===== Helpers =====
 
@@ -167,9 +177,14 @@ router.post('/profile/status', async (req: express.Request, res: express.Respons
   else if (base === 'REJECTED') status = 'BASE_DECLINED'
   else if (base === 'APPROVED') {
     // после первой модерации даём шаг описания
-    if (desc === 'PENDING') status = 'UNDER_REVIEW_DESC'
-    else if (desc === 'REJECTED') status = 'DESC_DECLINED'
-    else status = 'NEED_DESCRIPTION'
+    const pendingDesc = await prisma.moderationItem.count({ where: { userId, type: 'PROFILE_DESCRIPTION', status: 'PENDING' } })
+    if (!profile.description) {
+      status = pendingDesc > 0 ? 'UNDER_REVIEW_DESC' : 'NEED_DESCRIPTION'
+    } else {
+      if (desc === 'PENDING' || pendingDesc > 0) status = 'UNDER_REVIEW_DESC'
+      else if (desc === 'REJECTED') status = 'DESC_DECLINED'
+      else status = 'READY'
+    }
   }
   return res.json({ ok: true, status })
 })

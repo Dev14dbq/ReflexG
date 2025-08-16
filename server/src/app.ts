@@ -5,6 +5,8 @@ import { ordersRouter } from '@/routes/orders'
 import { profileRouter } from '@/routes/profile'
 import { cdnRouter } from '@/routes/cdn'
 import { placesRouter } from '@/routes/places'
+import { profileDetailsRouter } from '@/routes/profile.details'
+import { messagesRouter } from '@/routes/messages'
 
 export function createApp(): express.Express {
   const app = express()
@@ -22,11 +24,15 @@ export function createApp(): express.Express {
   app.use('/', profileRouter)
   app.use('/', cdnRouter)
   app.use('/', placesRouter)
+  app.use('/', profileDetailsRouter)
+  app.use('/', messagesRouter)
   app.use('/api', authRouter)
   app.use('/api', ordersRouter)
   app.use('/api', profileRouter)
   app.use('/api', cdnRouter)
   app.use('/api', placesRouter)
+  app.use('/api', profileDetailsRouter)
+  app.use('/api', messagesRouter)
 
   // error handler
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -96,4 +96,70 @@ body { background: var(--color-bg); color: var(--color-fg); }
 .progress-segments .seg { flex: 1; height: 4px; border-radius: 999px; background: color-mix(in oklab, var(--color-fg) 18%, transparent); }
 .progress-segments .seg.active { background: var(--color-fg); }
 
+/* Background ripple utility */
+.bg-ripple { position: relative; overflow: hidden; }
+.bg-ripple::before, .bg-ripple::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+}
+.bg-ripple::before {
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,0.08) 2px, transparent 0),
+    radial-gradient(circle at 70% 60%, rgba(255,255,255,0.06) 3px, transparent 0),
+    radial-gradient(circle at 40% 80%, rgba(255,255,255,0.1) 2px, transparent 0);
+  background-size: 60px 60px;
+  filter: blur(6px) contrast(120%);
+  z-index: 0;
+}
+.bg-ripple::after {
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(255,255,255,0.15) 2px, transparent 0),
+    radial-gradient(circle at 80% 40%, rgba(255,255,255,0.1) 3px, transparent 0),
+    radial-gradient(circle at 50% 70%, rgba(255,255,255,0.12) 2px, transparent 0);
+  background-size: 50px 50px; z-index: 1;
+}
+
+/* Slider styling */
+.slider { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 999px; outline: none; background: color-mix(in oklab, var(--color-accent) 20%, transparent); }
+.slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--color-accent); cursor: pointer; border: 2px solid color-mix(in oklab, var(--color-bg) 80%, transparent); }
+.slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--color-accent); cursor: pointer; border: 2px solid color-mix(in oklab, var(--color-bg) 80%, transparent); }
+.slider::-ms-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--color-accent); border: 2px solid color-mix(in oklab, var(--color-bg) 80%, transparent); }
+
+/* Checkbox styling */
+.checkbox {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-accent);
+  border-radius: 6px;
+  background: transparent;
+  display: inline-block;
+  position: relative;
+  cursor: pointer;
+}
+.checkbox:focus { outline: none; box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 30%, transparent); }
+.checkbox:checked { background: var(--color-accent); border-color: var(--color-accent); }
+.checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px; height: 10px;
+  margin-left: -3px; margin-top: -6px;
+  border: 2px solid #fff;
+  border-top: 0; border-left: 0;
+  transform: rotate(45deg);
+}
+
+/* Entry gate animation overlay */
+.entry-gate { position: fixed; inset: 0; background: var(--color-bg); display: flex; align-items: center; justify-content: center; z-index: 9999; transition: transform .4s ease, opacity .4s ease; }
+.entry-gate.exit { transform: translateY(-20%); opacity: 0; }
+
+/* Simple loading ellipsis */
+.loader-ellipsis { font-size: 1.25rem; }
+.loader-ellipsis .dots span { animation: blink 1.2s infinite; display: inline-block; }
+.loader-ellipsis .dots span:nth-child(2) { animation-delay: .2s }
+.loader-ellipsis .dots span:nth-child(3) { animation-delay: .4s }
+@keyframes blink { 0%, 20% { opacity: 0 } 50% { opacity: 1 } 100% { opacity: 0 } }
+
 

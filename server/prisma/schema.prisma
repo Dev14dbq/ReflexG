@@ -67,6 +67,10 @@ model User {
   profile      Profile?
   photos       Photo[]
   moderations  ModerationItem[]
+  chatMemberships ChatMember[]
+  messagesSent    Message[]
+  likesSent       Like[]
+  likesReceived   Like[]        @relation("LikeTarget")
 }
 
 model Profile {
@@ -144,5 +148,78 @@ model GenderCompatibility {
   to   GenderIdentity
 
   @@id([from, to])
+}
+
+// ================= Messaging =================
+
+model Chat {
+  id             String        @id @default(cuid())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lastMessageAt  DateTime?
+  isDialog       Boolean       @default(true)
+
+  members        ChatMember[]
+  messages       Message[]
+
+  @@index([lastMessageAt])
+}
+
+model ChatMember {
+  chatId  String
+  userId  BigInt  @db.BigInt
+  joinedAt DateTime @default(now())
+
+  chat    Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [telegramId], onDelete: Cascade)
+
+  lastReadMessageId String?
+
+  @@id([chatId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  chatId    String
+  senderId  BigInt   @db.BigInt
+  text      String?  @db.Text
+  photoUrl  String?
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+
+  chat   Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender User @relation(fields: [senderId], references: [telegramId], onDelete: Cascade)
+
+  attachments MessageAttachment[]
+
+  @@index([chatId, createdAt])
+}
+
+model MessageAttachment {
+  id        String   @id @default(cuid())
+  messageId String
+  kind      String   // e.g. image, video
+  url       String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+// Likes / matches
+model Like {
+  userId       BigInt   @db.BigInt
+  targetUserId BigInt   @db.BigInt
+  isLike       Boolean
+  createdAt    DateTime @default(now())
+  matchedAt    DateTime?
+
+  user   User @relation(fields: [userId], references: [telegramId], onDelete: Cascade)
+  target User @relation("LikeTarget", fields: [targetUserId], references: [telegramId], onDelete: Cascade)
+
+  @@id([userId, targetUserId])
+  @@index([targetUserId])
 }
 

@@ -63,4 +63,37 @@ export async function getProfileStatus(initData: string): Promise<ProfileStatusR
   return ProfileStatusResponse.parse(data)
 }
 
+// ===== Details (stage 2) =====
+
+export const LookingForEnum = z.enum(['LONG_DISTANCE','LOCAL','SEX','COMMUNICATION','EXCHANGE'])
+export type LookingForEnum = z.infer<typeof LookingForEnum>
+
+export const SubmitDetailsRequest = z.object({
+  initData: z.string().min(1),
+  description: z.string().min(24).max(1200),
+  consentAccepted: z.literal(true),
+  lookingFor: z.array(LookingForEnum).max(5).optional().default([]),
+  heightCm: z.number().int().min(130).max(220).optional(),
+  weightKg: z.number().int().min(30).max(300).optional(),
+  wandSizeCm: z.number().int().min(3).max(30).optional(),
+})
+export type SubmitDetailsRequest = z.infer<typeof SubmitDetailsRequest>
+
+export const SubmitDetailsResponse = z.object({ ok: z.literal(true), status: z.literal('UNDER_REVIEW_DESC') })
+  .or(z.object({ ok: z.literal(false), message: z.string().optional() }))
+export type SubmitDetailsResponse = z.infer<typeof SubmitDetailsResponse>
+
+export async function submitProfileDetails(body: SubmitDetailsRequest): Promise<SubmitDetailsResponse> {
+  const base = requireEnvUrl('API_URL')
+  const url = joinUrl(base, 'profile/submit-details')
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  if (!resp.ok) return { ok: false, message: `HTTP ${resp.status}` }
+  const data = await resp.json().catch(() => ({}))
+  return SubmitDetailsResponse.parse(data)
+}
+
 
