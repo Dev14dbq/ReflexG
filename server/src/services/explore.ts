@@ -24,6 +24,15 @@ export async function fetchNextProfileForUser(userId: bigint): Promise<PublicPro
   const myGender = me?.gender || null
 
   // find candidate user
+  let genderFilter: any = {}
+  if (myGender) {
+    const targets = await compatibleTargets(myGender)
+    // If mapping is empty, do not apply filter to avoid empty result set
+    if (Array.isArray(targets) && targets.length > 0) {
+      genderFilter = { profile: { is: { gender: { in: targets } } } }
+    }
+  }
+
   const candidate = await prisma.user.findFirst({
     where: {
       telegramId: { not: userId },
@@ -31,8 +40,8 @@ export async function fetchNextProfileForUser(userId: bigint): Promise<PublicPro
       likesReceived: { none: { userId, } },
       // has approved base profile
       profile: { is: { initialModerationStatus: 'APPROVED' } },
-      // gender compatibility (if my gender known)
-      ...(myGender ? { profile: { is: { gender: { in: (await compatibleTargets(myGender)) } } } } : {}),
+      // gender compatibility (if mapping exists)
+      ...genderFilter,
     },
     orderBy: { createdAt: 'desc' },
     select: { telegramId: true, profile: { select: { displayName: true, birthDate: true, city: true, description: true } } },

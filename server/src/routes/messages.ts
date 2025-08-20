@@ -68,6 +68,47 @@ router.get('/messages/chats', async (req: express.Request, res: express.Response
   return res.json({ ok: true, items, nextCursor })
 })
 
+const ChatHistoryQuery = z.object({
+  initData: z.string().min(1),
+  chatId: z.string().min(1),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(30),
+})
+
+router.get('/messages/history', async (req: express.Request, res: express.Response) => {
+  const parsed = ChatHistoryQuery.safeParse(req.query)
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid query' })
+  const token = ENV.TELEGRAM_BOT_TOKEN
+  if (!token) return res.status(500).json({ message: 'Server misconfigured' })
+  const v = verifyTelegramInitData(parsed.data.initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
+  if (!v.ok || !v.user) return res.status(401).json({ message: 'Unauthorized' })
+
+  const userId = BigInt(v.user.id)
+  const chatId = parsed.data.chatId
+  // verify membership
+  const member = await prisma.chatMember.findUnique({ where: { chatId_userId: { chatId, userId } } })
+  if (!member) return res.status(403).json({ message: 'Forbidden' })
+
+  const limit = parsed.data.limit
+  // For simplicity: get last N by createdAt desc, then reverse for ascending display
+  const rows = await prisma.message.findMany({
+    where: { chatId, deletedAt: null },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    select: { id: true, senderId: true, text: true, photoUrl: true, createdAt: true },
+  })
+
+  const items = rows.reverse().map(r => ({
+    id: r.id,
+    senderId: String(r.senderId),
+    text: r.text ?? '',
+    photoUrl: r.photoUrl ?? null,
+    createdAt: r.createdAt.toISOString(),
+  }))
+
+  return res.json({ ok: true, items })
+})
+
 export const messagesRouter = router
 
 

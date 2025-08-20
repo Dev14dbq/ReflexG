@@ -28,6 +28,7 @@ export function TelegramAuthProvider({ children }: PropsWithChildren): JSX.Eleme
   const [user, setUser] = useState<import('@/shared/lib/telegram').TelegramUser | null>(null)
   const [statuses, setStatuses] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [showLoading, setShowLoading] = useState<boolean>(false)
 
   const pushStatus = (msg: string) => setStatuses(prev => [...prev, msg])
   const hasInitializedRef = useRef<boolean>(false)
@@ -35,6 +36,9 @@ export function TelegramAuthProvider({ children }: PropsWithChildren): JSX.Eleme
   useEffect(() => {
     if (hasInitializedRef.current) return
     hasInitializedRef.current = true
+
+    // Defer showing the loading overlay to avoid flash on fast init
+    const timer = setTimeout(() => setShowLoading(true), 200)
 
     const inWebApp = isTelegramInWebApp()
     setIsWebApp(inWebApp)
@@ -75,6 +79,7 @@ export function TelegramAuthProvider({ children }: PropsWithChildren): JSX.Eleme
         pushStatus('Ошибка проверки')
       } finally {
         setReady(true)
+        clearTimeout(timer)
       }
     })()
   }, [])
@@ -82,9 +87,11 @@ export function TelegramAuthProvider({ children }: PropsWithChildren): JSX.Eleme
   const value = useMemo<TelegramAuthState>(() => ({ ready, isWebApp, user, statuses, error }), [ready, isWebApp, user, statuses, error])
 
   if (!ready) {
+    // Suppress overlay until delay elapsed; hide debug statuses to avoid flicker of text
+    if (!showLoading) return <TelegramAuthContext.Provider value={value}></TelegramAuthContext.Provider>
     return (
       <TelegramAuthContext.Provider value={value}>
-        <LoadingScreen statuses={statuses} />
+        <LoadingScreen statuses={[]} />
       </TelegramAuthContext.Provider>
     )
   }

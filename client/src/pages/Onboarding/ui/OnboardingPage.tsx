@@ -15,6 +15,24 @@ function isGenderRequiresSex(g: typeof GenderEnum._type): boolean {
   return g === 'GAY' || g === 'LESBIAN'
 }
 
+function parseBirthDateDDMMYYYY(s: string): Date | null {
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (!m) return null
+  const d = Number(m[1]); const mo = Number(m[2]); const y = Number(m[3])
+  const date = new Date(Date.UTC(y, mo - 1, d))
+  if (date.getUTCDate() !== d || date.getUTCMonth() !== mo - 1 || date.getUTCFullYear() !== y) return null
+  return date
+}
+
+function calcAge(date: Date | null): number | null {
+  if (!date) return null
+  const now = new Date()
+  let age = now.getUTCFullYear() - date.getUTCFullYear()
+  const m = now.getUTCMonth() - date.getUTCMonth()
+  if (m < 0 || (m === 0 && now.getUTCDate() < date.getUTCDate())) age--
+  return age
+}
+
 export default function OnboardingPage(): JSX.Element {
   const { ready, isWebApp } = useTelegramAuth()
   const [step, setStep] = useState<Step>('CITY')
@@ -68,7 +86,11 @@ export default function OnboardingPage(): JSX.Element {
     switch (step) {
       case 'CITY': return Boolean(cityId)
       case 'NAME': return /^[А-Яа-яЁё]{2,16}$/.test(displayName)
-      case 'BIRTHDATE': return /^\d{2}\/\d{2}\/\d{4}$/.test(birthDate)
+      case 'BIRTHDATE': {
+        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(birthDate)) return false
+        const age = calcAge(parseBirthDateDDMMYYYY(birthDate))
+        return age !== null && age >= 13 && age <= 19
+      }
       case 'GENDER': return Boolean(gender)
       case 'SEX': return !gender || !isGenderRequiresSex(gender) || Boolean(sex)
       case 'PHOTOS': return photoUrls.every(Boolean)
@@ -88,7 +110,10 @@ export default function OnboardingPage(): JSX.Element {
       return
     }
     if (step === 'BIRTHDATE') {
-      if (!/^\d{2}\/\d{2}\/\d{4}$/.test(birthDate)) toast.error('Дата в формате ДД/ММ/ГГГГ')
+      if (!/^\d{2}\/\d{2}\/\d{4}$/.test(birthDate)) { toast.error('Дата в формате ДД/ММ/ГГГГ'); return }
+      const age = calcAge(parseBirthDateDDMMYYYY(birthDate))
+      if (age === null) { toast.error('Некорректная дата'); return }
+      if (age < 13 || age > 19) { toast.error('Доступно только для 13–19 лет'); return }
       return
     }
     if (step === 'GENDER' && !gender) toast.error('Выберите гендер')
@@ -134,8 +159,11 @@ export default function OnboardingPage(): JSX.Element {
       if (!resp.ok) throw new Error(resp.message || 'Ошибка отправки')
       setStep('DONE')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Неизвестная ошибка')
-      setStep('PHOTOS')
+      const msg = e instanceof Error ? e.message : 'Неизвестная ошибка'
+      setError(msg)
+      if (/birthdate|возраст|age/i.test(msg)) setStep('BIRTHDATE')
+      else if (/sex|пол/i.test(msg)) setStep('SEX')
+      else setStep('PHOTOS')
     }
   }
 

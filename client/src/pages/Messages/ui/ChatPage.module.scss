@@ -1,0 +1,679 @@
+/* Container for the entire page */
+.container {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.svgTest {
+  width: 100%;
+  height: 100%;
+  background-image: url('/pattern.svg');
+  background-repeat: repeat;
+  background-size: 100px auto;
+  background-color: #ff6b6b; /* Красный фон */
+  filter: hue-rotate(120deg) saturate(2); /* Делаем SVG зеленым и ярким */
+  opacity: 0.8; /* Высокая прозрачность для видимости */
+}
+
+/* Fixed header block */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: color-mix(in oklab, var(--color-bg) 95%, var(--color-accent) 5%);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent);
+  transition: all 0.2s ease;
+}
+
+/* Back button */
+.backButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+  color: var(--color-fg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: color-mix(in oklab, var(--color-accent) 20%, transparent);
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  svg {
+    stroke: currentColor;
+  }
+}
+
+/* User info section */
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  justify-content: center;
+}
+
+/* Avatar */
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid color-mix(in oklab, var(--color-accent) 30%, transparent);
+  background: color-mix(in oklab, var(--color-bg) 92%, var(--color-accent) 8%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.avatarPlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+}
+
+/* User name */
+.userName {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--color-fg);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.onlineIndicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  border: 2px solid var(--color-bg);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 30%, transparent);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 50%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px color-mix(in oklab, var(--color-accent) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 0%, transparent);
+  }
+}
+
+/* More button */
+.moreButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+  color: var(--color-fg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: color-mix(in oklab, var(--color-accent) 20%, transparent);
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+/* Chat content area */
+ .chatContent {
+   margin-top: 80px; /* Space for fixed header */
+   padding: 16px;
+   padding-bottom: 100px; /* Space for fixed composer */
+   flex: 1;
+   overflow-y: auto;
+   display: flex;
+   flex-direction: column;
+   min-height: 0; /* Важно для flexbox */
+ }
+
+/* Empty chat state */
+.emptyChat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.emptyIcon {
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.emptyTitle {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--color-fg);
+}
+
+.emptySubtitle {
+  font-size: 14px;
+  line-height: 1.4;
+  max-width: 280px;
+}
+
+/* Error state */
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.errorIcon {
+  margin-bottom: 16px;
+  opacity: 0.6;
+  color: #ef4444;
+}
+
+.errorTitle {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--color-fg);
+}
+
+.errorMessage {
+  font-size: 14px;
+  line-height: 1.4;
+  max-width: 280px;
+  margin-bottom: 16px;
+  color: #ef4444;
+}
+
+.retryButton {
+  background: var(--color-accent);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: var(--color-accent-hover);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+/* Messages list */
+.messagesList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dateGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dateDivider {
+  position: sticky;
+  top: 0; /* прилипает к верхней границе зоны прокрутки */
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+}
+
+.dateDivider {
+  align-self: center;
+  background: color-mix(in oklab, var(--color-bg) 85%, var(--color-accent) 15%);
+  color: var(--color-fg);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+.messageGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Message styles */
+.message {
+  display: flex;
+  flex-direction: column;
+  max-width: 70%;
+  animation: fadeIn 0.3s ease;
+  align-items: flex-start;
+  position: relative; /* Добавляем для позиционирования иконки */
+}
+
+.messageFirst {
+  margin-bottom: 0;
+}
+
+.messageMiddle {
+  margin-bottom: 0;
+}
+
+.messageLast {
+  margin-bottom: 0;
+  position: relative; /* Для позиционирования иконки */
+}
+
+.messageSingle {
+  margin-bottom: 0;
+  position: relative; /* Для позиционирования иконки */
+}
+
+.ownMessage {
+  align-self: flex-end;
+  align-items: flex-end;
+  width: 100%;
+
+  &.messageFirst .messageContent {
+    background: var(--color-accent);
+    color: white;
+    border-radius: 18px 18px 4px 18px;
+    margin-left: auto;
+  }
+
+  &.messageMiddle .messageContent {
+    background: var(--color-accent);
+    color: white;
+    border-radius: 18px 4px 4px 18px;
+    margin-left: auto;
+  }
+
+  &.messageLast .messageContent {
+    background: var(--color-accent);
+    color: white;
+    border-radius: 18px 4px 0px 18px;
+    margin-left: auto;
+  }
+
+  &.messageSingle .messageContent {
+    background: var(--color-accent);
+    color: white;
+    border-radius: 18px 18px 0px 18px;
+    margin-left: auto;
+  }
+
+  &.messageSingle::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; /* Сдвигаем на 1px вниз, чтобы уголок доходил до самого угла */
+    right: -9px; /* Позиционируем иконку справа от сообщения */
+    width: 14px;
+    height: 19px;
+    background-color: var(--color-accent); /* Цвет под сообщением */
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    pointer-events: none;
+    transform: scaleX(-1); /* Отзеркаливаем иконку по горизонтали */
+  }
+
+  &.messageLast::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; /* Сдвигаем на 1px вниз, чтобы уголок доходил до самого угла */
+    right: -9px; /* Позиционируем иконку справа от сообщения */
+    width: 14px;
+    height: 19px;
+    background-color: var(--color-accent); /* Цвет под сообщением */
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    pointer-events: none;
+    transform: scaleX(-1); /* Отзеркаливаем иконку по горизонтали */
+  }
+
+  .messageTime {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1;
+    align-self: end;
+  }
+}
+
+.otherMessage {
+  align-self: flex-start;
+  align-items: flex-start;
+  width: 100%;
+
+  &.messageFirst .messageContent {
+    background: color-mix(in oklab, var(--color-bg) 70%, var(--color-accent) 30%);
+    color: var(--color-fg);
+    border-radius: 18px 18px 18px 4px;
+    margin-right: auto;
+  }
+
+  &.messageMiddle .messageContent {
+    background: color-mix(in oklab, var(--color-bg) 70%, var(--color-accent) 30%);
+    color: var(--color-fg);
+    border-radius: 4px 18px 18px 4px;
+    margin-right: auto;
+  }
+
+  &.messageLast .messageContent {
+    background: color-mix(in oklab, var(--color-bg) 70%, var(--color-accent) 30%);
+    color: var(--color-fg);
+    border-radius: 4px 18px 18px 0px;
+    margin-right: auto;
+  }
+
+  &.messageSingle .messageContent {
+    background: color-mix(in oklab, var(--color-bg) 70%, var(--color-accent) 30%);
+    color: var(--color-fg);
+    border-radius: 18px 18px 18px 0px;
+    margin-right: auto;
+  }
+
+  &.messageSingle::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; /* Сдвигаем на 1px вниз, чтобы уголок доходил до самого угла */
+    left: -8px; /* Позиционируем иконку слева от сообщения */
+    width: 11px;
+    height: 19px;
+    background-color: color-mix(in oklab, var(--color-bg) 70%, var(--color-accent) 30%); /* Цвет под сообщением */
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    pointer-events: none;
+  }
+
+  &.messageLast::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; /* Сдвигаем на 1px вниз, чтобы уголок доходил до самого угла */
+    left: -8px; /* Позиционируем иконку слева от сообщения */
+    width: 11px;
+    height: 19px;
+    background-color: color-mix(in oklab, var(--color-bg) 70%, var(--color-accent) 30%); /* Цвет под сообщением */
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    pointer-events: none;
+  }
+
+  .messageTime {
+    color: var(--color-muted);
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1;
+    align-self: end;
+  }
+}
+
+.messageContent {
+  padding: 12px 16px;
+  word-wrap: break-word;
+  line-height: 1.4;
+  margin-bottom: 0;
+  display: inline-block;
+  max-width: fit-content;
+}
+
+.messageTextContainer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0;
+  width: 100%;
+  align-items: end;
+}
+
+.messageText {
+  grid-column: 1;
+  grid-row: 1;
+  word-break: break-word;
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.messageTime {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
+  align-self: end;
+  margin-left: 8px;
+}
+
+
+
+.messageTimeOnly {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.messagePhoto {
+  width: 100%;
+  max-width: 200px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+
+
+/* Fullscreen pattern using CSS gradients instead of SVG */
+.background {
+  position: fixed;
+  inset: 0;
+  background: 
+    linear-gradient(45deg, transparent 40%, rgba(0, 0, 0, 0.1) 50%, transparent 60%),
+    linear-gradient(-45deg, transparent 40%, rgba(0, 0, 0, 0.1) 50%, transparent 60%);
+  background-size: 50px 50px, 30px 30px;
+  background-position: 0 0, 15px 15px;
+  opacity: 1;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Fullscreen pattern using the SVG as a repeating mask */
+.patternFull {
+  position: fixed;
+  inset: 0;
+  background-color: var(--pattern-color, var(--color-accent));
+  -webkit-mask-image: var(--pattern-url, url('/pattern.svg'));
+  mask-image: var(--pattern-url, url('/pattern.svg'));
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+  -webkit-mask-size: var(--pattern-size, 160px auto);
+  mask-size: var(--pattern-size, 160px auto);
+  -webkit-mask-position: 0 0;
+  mask-position: 0 0;
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .header {
+    padding: 12px;
+  }
+  
+     .chatContent {
+     margin-top: 72px;
+     padding: 12px;
+   }
+  
+  .message {
+    max-width: 85%;
+  }
+  
+  .userName {
+    font-size: 14px;
+  }
+}
+
+/* Composer (input area) fixed at bottom */
+.composer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: color-mix(in oklab, var(--color-bg) 92%, var(--color-accent) 8%);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent);
+}
+
+.composerInner {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.actionButton {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+  color: var(--color-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+
+  &:hover { background: color-mix(in oklab, var(--color-accent) 20%, transparent); transform: scale(1.05); }
+  &:active { transform: scale(0.95); }
+}
+
+.inputWrapper {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: color-mix(in oklab, var(--color-bg) 98%, var(--color-accent) 2%);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent);
+  border-radius: 20px;
+  padding: 8px 12px;
+}
+
+ .textarea {
+   flex: 1 1 auto;
+   height: 24px;
+   line-height: 20px;
+   padding: 6px 0;
+   background: transparent;
+   color: var(--color-fg);
+   border: none;
+   outline: none;
+   resize: none;
+   overflow: hidden;
+   font-size: 14px;
+   word-wrap: break-word;
+ }
+
+.sendButton {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-accent);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+
+  &:hover { background: var(--color-accent-hover); transform: translateY(-1px); }
+  &:active { transform: translateY(0); }
+  &:disabled { opacity: 0.5; cursor: default; transform: none; }
+}

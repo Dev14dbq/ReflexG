@@ -40,7 +40,18 @@ export async function submitBaseProfile(payload: SubmitBaseProfileRequest): Prom
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (!resp.ok) return { ok: false, message: `HTTP ${resp.status}` }
+  if (!resp.ok) {
+    let message = `HTTP ${resp.status}`
+    try {
+      const data = await resp.json()
+      if (data && typeof data.message === 'string') message = data.message
+      if (data && Array.isArray(data.issues) && data.issues.length > 0) {
+        const issueMsg = data.issues[0]?.message
+        if (typeof issueMsg === 'string' && issueMsg) message = `${message}: ${issueMsg}`
+      }
+    } catch {}
+    return { ok: false, message }
+  }
   const data = await resp.json().catch(() => ({}))
   return SubmitBaseProfileResponse.parse(data)
 }
@@ -91,7 +102,18 @@ export async function submitProfileDetails(body: SubmitDetailsRequest): Promise<
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   })
-  if (!resp.ok) return { ok: false, message: `HTTP ${resp.status}` }
+  if (!resp.ok) {
+    let message = `HTTP ${resp.status}`
+    try {
+      const data = await resp.json()
+      if (data && typeof data.message === 'string') message = data.message
+      if (data && Array.isArray(data.issues) && data.issues.length > 0) {
+        const issueMsg = data.issues[0]?.message
+        if (typeof issueMsg === 'string' && issueMsg) message = `${message}: ${issueMsg}`
+      }
+    } catch {}
+    return { ok: false, message }
+  }
   const data = await resp.json().catch(() => ({}))
   return SubmitDetailsResponse.parse(data)
 }
