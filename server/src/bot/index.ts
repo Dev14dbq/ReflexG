@@ -15,7 +15,7 @@ export function createBot(): Bot | null {
       ? `<a href="${startAppUrl}">Создайте анкету и смотрите, кто рядом</a>`
       : 'Создайте анкету и смотрите, кто рядом'
     const text = [
-      'Добро пожаловать в Reflex 🏳️‍🌈',
+      'Добро пожаловать в Okeano (ранее Reflex) 🏳️‍🌈',
       '',
       'Здесь знакомятся ЛГБТК+ персоны из СНГ — быстро, безопасно и прямо в Telegram. Все профили проходят верификацию.',
       '',
@@ -25,7 +25,7 @@ export function createBot(): Bot | null {
     ].join('\n')
 
     const kb = new InlineKeyboard()
-    if (startAppUrl) kb.url('Открыть Reflex', startAppUrl)
+    if (startAppUrl) kb.url('Открыть Okeano', startAppUrl)
     
     // Проверяем роль пользователя и добавляем кнопку админки
     try {

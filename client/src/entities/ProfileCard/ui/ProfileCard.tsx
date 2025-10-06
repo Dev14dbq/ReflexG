@@ -1,19 +1,126 @@
 import type { JSX } from 'react'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { z } from 'zod'
-import { FaVenusMars, FaRuler, FaMagic, FaHeart, FaTimes } from 'react-icons/fa'
+import { FaVenusMars, FaRuler, FaMagic, FaHeart, FaTimes, FaEdit, FaWeight, FaFlag } from 'react-icons/fa'
+
+import { patchMyProfile, GenderEnum, reportProfile, ReportReasonEnum } from '@/shared/api/profile'
+import { uploadImage } from '@/shared/api/cdn'
+import { compressImageToJpeg } from '@/shared/lib/image'
+import BottomSheet from '@/shared/ui/BottomSheet/BottomSheet'
+import { toast } from 'sonner'
+
+// DnD Kit imports
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import {
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+
+const ORIENTATION_RU: Record<string, string> = {
+  GAY: 'Гей',
+  LESBIAN: 'Лесби',
+  BISEXUAL: 'Би',
+  PANSEXUAL: 'Пан',
+  QUEER: 'Квир',
+  ASEXUAL: 'Асексуал',
+}
+
+// Компонент для сортируемого элемента фотографии
+interface SortablePhotoItemProps {
+  id: string
+  photo: string
+  index: number
+  isUploading: boolean
+  onReplace: (file: File) => void
+}
+
+function SortablePhotoItem({ id, photo, index, isUploading, onReplace }: SortablePhotoItemProps): JSX.Element {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    background: 'color-mix(in oklab, var(--color-bg) 92%, var(--color-accent) 8%)',
+    cursor: photo ? 'grab' : 'pointer'
+  }
+
+  return (
+    <label className="block">
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) onReplace(file)
+        }}
+      />
+      <div
+        ref={setNodeRef}
+        className={`h-24 w-20 rounded-lg border-2 border-[color-mix(in_oklab,var(--color-accent)20%,transparent)] flex items-center justify-center overflow-hidden cursor-pointer hover:border-[color-mix(in_oklab,var(--color-accent)40%,transparent)] transition-all duration-200 relative group ${
+          isDragging ? 'scale-105 shadow-lg' : ''
+        }`}
+        style={style}
+        {...(photo ? { ...attributes, ...listeners } : {})}
+      >
+        {isUploading ? (
+          <div className="text-xs text-[color-mix(in_oklab,var(--color-fg)50%,var(--color-muted)50%)] animate-pulse">
+            ...
+          </div>
+        ) : photo ? (
+          <>
+            <img src={photo} alt={`Фото ${index + 1}`} className="h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-medium">
+                Заменить
+              </div>
+            </div>
+            {/* Drag handle */}
+            <div className="absolute top-1 right-1 w-4 h-4 rounded bg-white/20 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="w-2 h-2 bg-white/60 rounded-full"></div>
+            </div>
+          </>
+        ) : (
+          <span className="text-2xl text-[var(--color-accent)]">+</span>
+        )}
+      </div>
+    </label>
+  )
+}
 
 export const ProfileCardSchema = z.object({
   userId: z.string().min(1),
   displayName: z.string().nullable(),
-  age: z.number().int().min(14).max(120).nullable(),
+  age: z.number().int().min(1).max(120).nullable(),
   city: z.string().nullable(),
   photos: z.array(z.string().url()).min(0),
   bio: z.string().nullable(),
   heightCm: z.number().int().min(100).max(250).nullable().optional(),
   weightKg: z.number().int().min(20).max(400).nullable().optional(),
   wandSizeCm: z.number().int().min(1).max(100).nullable().optional(),
-  gender: z.string().nullable().optional(),
+  gender: GenderEnum.nullable().optional(),
 })
 export type ProfileCardData = z.infer<typeof ProfileCardSchema>
 
@@ -21,6 +128,8 @@ interface Props {
   data: ProfileCardData
   onLike: () => void
   onDislike: () => void
+  isEditable?: boolean
+  onProfileUpdate?: (updatedData: ProfileCardData) => void
 }
 
 interface ImageState {
@@ -35,13 +144,62 @@ interface SwipeState {
   isDragging: boolean
 }
 
-export default function ProfileCard({ data, onLike, onDislike }: Props): JSX.Element {
+export default function ProfileCard({ data, onLike, onDislike, isEditable = false, onProfileUpdate }: Props): JSX.Element {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
   const [imageStates, setImageStates] = useState<ImageState[]>([])
   const [showAllTags, setShowAllTags] = useState(false)
   const [tagsOverflow, setTagsOverflow] = useState(false)
   const [showFullBio, setShowFullBio] = useState(false)
   const [bioOverflow, setBioOverflow] = useState(false)
+  
+  // Состояния для редактирования
+  const [editingField, setEditingField] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [photoUploading, setPhotoUploading] = useState<boolean[]>([false, false, false])
+  const [isBottomSheetVisible, setIsBottomSheetVisible] = useState(false)
+  
+  // Состояния для репорта
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason] = useState<ReportReasonEnum | null>(null)
+  const [reportDescription, setReportDescription] = useState('')
+  const [isReporting, setIsReporting] = useState(false)
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false)
+  
+  // Управление видимостью BottomSheet для анимации исчезновения
+  useEffect(() => {
+    if (editingField) {
+      setIsBottomSheetVisible(true)
+    } else {
+      // Добавляем задержку для завершения анимации исчезновения
+      const timer = setTimeout(() => {
+        setIsBottomSheetVisible(false)
+      }, 300) // 300ms - длительность анимации BottomSheet
+      return () => clearTimeout(timer)
+    }
+  }, [editingField])
+
+  // Управление анимацией модального окна репорта
+  useEffect(() => {
+    if (showReportModal) {
+      setIsReportModalVisible(true)
+    } else {
+      // Добавляем задержку для завершения анимации исчезновения
+      const timer = setTimeout(() => {
+        setIsReportModalVisible(false)
+      }, 200) // 200ms - длительность анимации
+      return () => clearTimeout(timer)
+    }
+  }, [showReportModal])
+  
+  // DnD Kit сенсоры
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+  
   const [swipeState, setSwipeState] = useState<SwipeState>({
     startX: 0,
     currentX: 0,
@@ -535,24 +693,178 @@ export default function ProfileCard({ data, onLike, onDislike }: Props): JSX.Ele
     }
   }, [allPhotosFailed, data.photos])
 
+  // Функции для редактирования
+  const getFieldLabel = (field: string): string => {
+    const labels: Record<string, string> = {
+      displayName: 'Имя',
+      city: 'Город',
+      bio: 'О себе',
+      gender: 'Ориентацию',
+      heightCm: 'Рост',
+      weightKg: 'Вес',
+      wandSizeCm: 'Размер',
+      photos: 'Фотографии'
+    }
+    return labels[field] || field
+  }
+
+  const handleFieldClick = (field: string, currentValue: any) => {
+    if (!isEditable) return
+    
+    setEditingField(field)
+    if (field === 'photos') {
+      setEditValue(data.photos.join('\n'))
+    } else if (field === 'gender') {
+      setEditValue(currentValue || '')
+    } else {
+      setEditValue(currentValue || '')
+    }
+  }
+
+  const handleSave = async () => {
+    if (!editingField || !onProfileUpdate) return
+    
+    setIsSubmitting(true)
+    try {
+      const initData = window?.Telegram?.WebApp?.initData || ''
+      let updateData: any = { initData }
+      
+      if (editingField === 'photos') {
+        const photos = editValue.split('\n').filter(Boolean)
+        if (photos.length < 3) {
+          toast.error('Нужно загрузить минимум 3 фотографии')
+          return
+        }
+        updateData.photos = photos
+      } else if (editingField === 'gender') {
+        updateData.gender = editValue || null
+      } else if (editingField === 'heightCm' || editingField === 'weightKg' || editingField === 'wandSizeCm') {
+        const numValue = editValue ? parseInt(editValue) : null
+        if (editingField === 'heightCm') updateData.heightCm = numValue
+        else if (editingField === 'weightKg') updateData.weightKg = numValue
+        else if (editingField === 'wandSizeCm') updateData.wandSizeCm = numValue
+      } else if (editingField === 'displayName') {
+        updateData.displayName = editValue || null
+      } else if (editingField === 'city') {
+        updateData.city = editValue || null
+      } else if (editingField === 'bio') {
+        updateData.bio = editValue || null
+      }
+      
+      const resp = await patchMyProfile(updateData)
+      if (resp.ok) {
+        // Обновляем локальное состояние
+        const updatedData = { ...data }
+        if (editingField === 'photos') {
+          updatedData.photos = editValue.split('\n').filter(Boolean)
+        } else if (editingField === 'gender') {
+          updatedData.gender = editValue as any
+        } else if (editingField === 'heightCm' || editingField === 'weightKg' || editingField === 'wandSizeCm') {
+          const numValue = editValue ? parseInt(editValue) : null
+          if (editingField === 'heightCm') updatedData.heightCm = numValue
+          else if (editingField === 'weightKg') updatedData.weightKg = numValue
+          else if (editingField === 'wandSizeCm') updatedData.wandSizeCm = numValue
+        } else if (editingField === 'displayName') {
+          updatedData.displayName = editValue
+        } else if (editingField === 'city') {
+          updatedData.city = editValue
+        } else if (editingField === 'bio') {
+          updatedData.bio = editValue
+        }
+        
+        onProfileUpdate(updatedData)
+        toast.success('Изменения сохранены!')
+        setEditingField(null)
+      } else {
+        toast.error(resp.message || 'Ошибка сохранения')
+      }
+    } catch (error) {
+      toast.error('Ошибка сохранения')
+      console.error('Save error:', error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    
+    const photos = editValue.split('\n').filter(Boolean)
+    const oldIndex = photos.indexOf(active.id as string)
+    const newIndex = photos.indexOf(over.id as string)
+    
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const newPhotos = arrayMove(photos, oldIndex, newIndex)
+      setEditValue(newPhotos.join('\n'))
+    }
+  }
+
+  // Обработчики для репорта
+  const handleReportClick = () => {
+    setShowReportModal(true)
+    setReportReason(null)
+    setReportDescription('')
+  }
+
+  const handleReportSubmit = async () => {
+    if (!reportReason) {
+      toast.error('Выберите причину репорта')
+      return
+    }
+
+    setIsReporting(true)
+    try {
+      const initData = window?.Telegram?.WebApp?.initData || ''
+      const response = await reportProfile({
+        initData,
+        reportedUserId: data.userId,
+        reason: reportReason,
+        description: reportDescription.trim() || undefined
+      })
+
+      if (response.ok) {
+        toast.success('Репорт отправлен успешно')
+        setShowReportModal(false)
+        setReportReason(null)
+        setReportDescription('')
+      } else {
+        toast.error(response.message || 'Ошибка отправки репорта')
+      }
+    } catch (error) {
+      toast.error('Ошибка отправки репорта')
+      console.error('Report error:', error)
+    } finally {
+      setIsReporting(false)
+    }
+  }
+
+  const handleReportCancel = () => {
+    setShowReportModal(false)
+    setReportReason(null)
+    setReportDescription('')
+  }
+
   return (
     <div 
       ref={photoContainerRef}
-      className="relative w-full h-full overflow-hidden cursor-pointer select-none rounded-xl border-2 border-accent slide-in"
+      className={`relative w-full h-full overflow-hidden select-none rounded-xl border-2 border-accent slide-in ${
+        editingField ? 'pointer-events-none' : 'cursor-pointer'
+      }`}
       style={{ 
-        height: 'calc(100vh - var(--bottom-nav-height, 80px))', 
+        height: isEditable ? 'calc(100vh - 120px)' : 'calc(100vh - var(--bottom-nav-height, 80px))', 
         minHeight: '500px',
-        maxHeight: 'calc(100vh - 60px)',
+        maxHeight: isEditable ? 'calc(100vh - 120px)' : 'calc(100vh - 60px)',
         '--bottom-nav-height': '80px'
       } as React.CSSProperties}
-      onClick={handlePhotoClick}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={() => setSwipeState(prev => ({ ...prev, isDragging: false }))}
+      onClick={editingField ? undefined : handlePhotoClick}
+      onTouchStart={editingField ? undefined : (isEditable ? undefined : handleTouchStart)}
+      onTouchMove={editingField ? undefined : (isEditable ? undefined : handleTouchMove)}
+      onTouchEnd={editingField ? undefined : (isEditable ? undefined : handleTouchEnd)}
+      onMouseDown={editingField ? undefined : (isEditable ? undefined : handleMouseDown)}
+      onMouseMove={editingField ? undefined : (isEditable ? undefined : handleMouseMove)}
+      onMouseUp={editingField ? undefined : (isEditable ? undefined : handleMouseUp)}
+      onMouseLeave={() => !isEditable && !editingField && setSwipeState(prev => ({ ...prev, isDragging: false }))}
     >
         {data.photos?.[currentPhotoIndex] ? (
           <>
@@ -643,30 +955,63 @@ export default function ProfileCard({ data, onLike, onDislike }: Props): JSX.Ele
         {/* Градиент подложка для читаемости */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent z-10"></div>
 
-        {/* Верхняя панель: счетчик фото */}
-        {data.photos.length > 1 && hasValidPhotos && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20">
+        {/* Верхняя панель: счетчик фото и кнопка редактирования */}
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
+          {data.photos.length > 1 && hasValidPhotos && (
             <div className="px-3 py-1 rounded-full text-white text-xs bg-black/60 backdrop-blur-sm border border-white/20">
               {currentPhotoIndex + 1} / {data.photos.filter((_, index) => !imageStates[index]?.error).length}
             </div>
-          </div>
+          )}
+        </div>
+
+        {/* Кнопка редактирования фотографий в правом верхнем углу */}
+        {isEditable && (
+          <button
+            className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center text-white bg-black/60 backdrop-blur-sm border border-white/20 hover:bg-black/80 transition-colors z-20"
+            onClick={() => handleFieldClick('photos', data.photos)}
+          >
+            <FaEdit className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Кнопка репорта в правом верхнем углу */}
+        {!isEditable && (
+          <button
+            className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center text-white bg-white/15 hover:bg-white/25 border border-white/30 transition-all duration-200 hover:scale-110 backdrop-blur-sm z-20"
+            onClick={handleReportClick}
+            title="Пожаловаться на профиль"
+          >
+            <FaFlag className="w-3 h-3" />
+          </button>
         )}
 
         {/* Нижний стек: имя, теги, био, кнопки */}
-        <div className="absolute inset-x-0 bottom-0 z-20 px-4 pb-4 pt-2">
+        <div className="absolute inset-x-0 bottom-0 z-20 px-4 pb-4 pt-2 max-h-[60%] overflow-hidden">
+          {/* Градиент для обрезки контента */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent pointer-events-none"></div>
+          
+          {/* Контент */}
+          <div className="relative z-10">
           {/* Имя и возраст */}
-          <div className="text-white text-2xl font-bold drop-shadow-2xl">
+          <div 
+            className={`text-white text-2xl font-bold drop-shadow-2xl ${isEditable ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+            onClick={() => isEditable && handleFieldClick('displayName', data.displayName)}
+          >
             {title || 'Без имени'}
           </div>
 
           {/* Теги */}
-          <div ref={tagsRef} className="mt-3 flex flex-wrap gap-2">
+          <div ref={tagsRef} className="mt-3 flex flex-wrap gap-2 max-h-16 overflow-hidden">
             {(() => {
               const allTags = []
               
               if (data.city) {
                 allTags.push(
-                  <span key="city" className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white bg-white/10 backdrop-blur-sm border border-white/20">
+                  <span 
+                    key="city" 
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white bg-white/10 backdrop-blur-sm border border-white/20 ${isEditable ? 'cursor-pointer hover:bg-white/20 transition-colors' : ''}`}
+                    onClick={() => isEditable && handleFieldClick('city', data.city)}
+                  >
                     📍 {data.city}
                   </span>
                 )
@@ -674,27 +1019,50 @@ export default function ProfileCard({ data, onLike, onDislike }: Props): JSX.Ele
               
               if (data.gender) {
                 allTags.push(
-                  <span key="gender" className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white bg-white/10 backdrop-blur-sm border border-white/20">
+                  <span 
+                    key="gender" 
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white bg-white/10 backdrop-blur-sm border border-white/20 ${isEditable ? 'cursor-pointer hover:bg-white/20 transition-colors' : ''}`}
+                    onClick={() => isEditable && handleFieldClick('gender', data.gender)}
+                  >
                     <FaVenusMars className="w-3 h-3" />
                     {data.gender}
                   </span>
                 )
               }
               
-              if (data.heightCm || data.weightKg) {
+              if (data.heightCm) {
                 allTags.push(
-                  <span key="physical" className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white bg-white/10 backdrop-blur-sm border border-white/20">
+                  <span 
+                    key="height" 
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white bg-white/10 backdrop-blur-sm border border-white/20 ${isEditable ? 'cursor-pointer hover:bg-white/20 transition-colors' : ''}`}
+                    onClick={() => isEditable && handleFieldClick('heightCm', data.heightCm)}
+                  >
                     <FaRuler className="w-3 h-3" />
-                    {[formatHeight(data.heightCm), formatWeight(data.weightKg)]
-                      .filter(Boolean)
-                      .join(', ')}
+                    {formatHeight(data.heightCm)}
+                  </span>
+                )
+              }
+              
+              if (data.weightKg) {
+                allTags.push(
+                  <span 
+                    key="weight" 
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white bg-white/10 backdrop-blur-sm border border-white/20 ${isEditable ? 'cursor-pointer hover:bg-white/20 transition-colors' : ''}`}
+                    onClick={() => isEditable && handleFieldClick('weightKg', data.weightKg)}
+                  >
+                    <FaWeight className="w-3 h-3" />
+                    {formatWeight(data.weightKg)}
                   </span>
                 )
               }
               
               if (data.wandSizeCm) {
                 allTags.push(
-                  <span key="wand" className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white bg-white/10 backdrop-blur-sm border border-white/20">
+                  <span 
+                    key="wand" 
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white bg-white/10 backdrop-blur-sm border border-white/20 ${isEditable ? 'cursor-pointer hover:bg-white/20 transition-colors' : ''}`}
+                    onClick={() => isEditable && handleFieldClick('wandSizeCm', data.wandSizeCm)}
+                  >
                     <FaMagic className="w-3 h-3" />
                     {formatWandSize(data.wandSizeCm)}
                   </span>
@@ -720,7 +1088,11 @@ export default function ProfileCard({ data, onLike, onDislike }: Props): JSX.Ele
 
           {/* Описание */}
           {data.bio && (
-            <div ref={bioRef} className="mt-3 text-white text-sm drop-shadow-xl">
+            <div 
+              ref={bioRef} 
+              className={`mt-3 text-white text-sm drop-shadow-xl max-h-20 overflow-hidden ${isEditable ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+              onClick={() => isEditable && handleFieldClick('bio', data.bio)}
+            >
               {showFullBio || !bioOverflow ? (
                 data.bio
               ) : (
@@ -736,7 +1108,10 @@ export default function ProfileCard({ data, onLike, onDislike }: Props): JSX.Ele
                 >
                   {data.bio}
                   <button
-                    onClick={() => setShowFullBio(true)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowFullBio(true)
+                    }}
                     className="absolute bottom-0 right-0 bg-gradient-to-l from-black/80 to-transparent pl-2 text-white/80 hover:text-white underline cursor-pointer text-xs"
                     style={{ marginTop: '-0.2em' }}
                   >
@@ -748,21 +1123,319 @@ export default function ProfileCard({ data, onLike, onDislike }: Props): JSX.Ele
           )}
 
           {/* Кнопки действий */}
-          <div className="mt-5 mb-1 flex items-center justify-center gap-8">
-            <button
-              className="w-14 h-14 rounded-full flex items-center justify-center text-white bg-white/15 hover:bg-white/25 border border-white/30 transition-all duration-200 hover:scale-110 backdrop-blur-sm"
-              onClick={onDislike}
-            >
-              <FaTimes className="w-6 h-6" />
-            </button>
-            <button
-              className="w-14 h-14 rounded-full flex items-center justify-center text-white bg-white/15 hover:bg-white/25 border border-white/30 transition-all duration-200 hover:scale-110 backdrop-blur-sm"
-              onClick={onLike}
-            >
-              <FaHeart className="w-6 h-6" />
-            </button>
+          {!isEditable && (
+            <div className="mt-5 mb-1 flex items-center justify-center gap-8">
+              <button
+                className="w-14 h-14 rounded-full flex items-center justify-center text-white bg-white/15 hover:bg-white/25 border border-white/30 transition-all duration-200 hover:scale-110 backdrop-blur-sm"
+                onClick={onDislike}
+              >
+                <FaTimes className="w-6 h-6" />
+              </button>
+              <button
+                className="w-14 h-14 rounded-full flex items-center justify-center text-white bg-white/15 hover:bg-white/25 border border-white/30 transition-all duration-200 hover:scale-110 backdrop-blur-sm"
+                onClick={onLike}
+              >
+                <FaHeart className="w-6 h-6" />
+              </button>
+            </div>
+          )}
           </div>
         </div>
+
+        {/* BottomSheet для редактирования */}
+        {isEditable && (editingField || isBottomSheetVisible) && (
+          <>
+            {/* Оверлей для блокировки взаимодействия с фоном */}
+            <div className="absolute inset-0 bg-black/20 z-30 pointer-events-auto" />
+            <BottomSheet
+              isOpen={editingField !== null}
+              title={editingField ? `Редактировать ${getFieldLabel(editingField)}` : 'Редактирование'}
+              onClose={() => setEditingField(null)}
+              footer={
+                editingField ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditingField(null)}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-[var(--color-fg)] bg-[color-mix(in_oklab,var(--color-bg)95%,var(--color-accent)5%)] border border-[color-mix(in_oklab,var(--color-accent)20%,transparent)] rounded-lg hover:bg-[color-mix(in_oklab,var(--color-bg)90%,var(--color-accent)10%)] transition-colors"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      disabled={isSubmitting}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-[var(--color-accent)] rounded-lg hover:bg-[color-mix(in_oklab,var(--color-accent)90%,black)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isSubmitting ? 'Сохранение...' : 'Сохранить'}
+                    </button>
+                  </div>
+                ) : undefined
+              }
+            >
+            {editingField === 'photos' ? (
+              <div className="space-y-4">
+                <div className="text-xs text-[color-mix(in_oklab,var(--color-fg)70%,var(--color-muted)30%)]">
+                  Управление фотографиями. Нажмите на фото чтобы заменить, удерживайте чтобы изменить порядок.
+                </div>
+
+                {/* Фотографии с возможностью замены и перетаскивания */}
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-[var(--color-fg)]">Ваши фотографии (3 фото):</div>
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext
+                      items={editValue.split('\n').filter(Boolean)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="flex gap-3 justify-center">
+                        {(() => {
+                          const photos = editValue.split('\n').filter(Boolean)
+                          // Дополняем до 3 фотографий пустыми строками
+                          while (photos.length < 3) {
+                            photos.push('')
+                          }
+
+                          return photos.slice(0, 3).map((photo, index) => (
+                            <SortablePhotoItem
+                              key={photo || `empty-${index}`}
+                              id={photo || `empty-${index}`}
+                              photo={photo}
+                              index={index}
+                              isUploading={photoUploading[index] || false}
+                              onReplace={async (file) => {
+                                setPhotoUploading(prev => prev.map((v, idx) => idx === index ? true : v))
+                                try {
+                                  let input: File | Blob = file
+                                  try { input = await compressImageToJpeg(file, 1080, 0.82) } catch {}
+                                  const up = await uploadImage(input)
+                                  if (!up.ok) throw new Error(up.message || 'Не удалось загрузить')
+
+                                  // Заменяем фото по индексу
+                                  const currentPhotos = editValue.split('\n').filter(Boolean)
+                                  const newPhotos = [...currentPhotos]
+                                  while (newPhotos.length < 3) {
+                                    newPhotos.push('')
+                                  }
+                                  newPhotos[index] = up.url
+                                  setEditValue(newPhotos.filter(Boolean).join('\n'))
+                                  toast.success('Фото заменено!')
+                                } catch (err) {
+                                  toast.error(err instanceof Error ? err.message : 'Ошибка загрузки')
+                                } finally {
+                                  setPhotoUploading(prev => prev.map((v, idx) => idx === index ? false : v))
+                                }
+                              }}
+                            />
+                          ))
+                        })()}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                  <div className="text-xs text-[color-mix(in_oklab,var(--color-fg)50%,var(--color-muted)50%)] text-center">
+                    Только ваши фото, рисунки или природа. Не принимаются NSFW, текст/буквы и т.п.
+                  </div>
+                </div>
+
+              </div>
+            ) : editingField === 'bio' ? (
+              <div className="space-y-2">
+                <div className="text-xs text-[color-mix(in_oklab,var(--color-fg)70%,var(--color-muted)30%)]">
+                  Расскажите о себе (1-1200 символов)
+                </div>
+                <textarea
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  className="w-full p-3 border border-[color-mix(in_oklab,var(--color-accent)20%,transparent)] rounded-lg bg-[var(--color-bg)] text-[var(--color-fg)] resize-none"
+                  rows={6}
+                  placeholder="Расскажите о себе..."
+                  maxLength={1200}
+                />
+                <div className="text-xs text-[color-mix(in_oklab,var(--color-fg)50%,var(--color-muted)50%)] text-right">
+                  {editValue.length}/1200
+                </div>
+              </div>
+            ) : editingField === 'gender' ? (
+              <div className="space-y-3">
+                <div className="text-xs text-[color-mix(in_oklab,var(--color-fg)70%,var(--color-muted)30%)]">
+                  Выберите ориентацию
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {(() => {
+                    const currentGender = data.gender
+                    let availableOptions = Object.keys(ORIENTATION_RU)
+                    
+                    // Фильтруем опции в зависимости от текущего пола
+                    if (currentGender === 'GAY') {
+                      availableOptions = ['GAY', 'BISEXUAL', 'PANSEXUAL', 'QUEER', 'ASEXUAL']
+                    } else if (currentGender === 'LESBIAN') {
+                      availableOptions = ['LESBIAN', 'BISEXUAL', 'PANSEXUAL', 'QUEER', 'ASEXUAL']
+                    }
+                    
+                    return availableOptions.map((key) => (
+                      <button
+                        key={key}
+                        onClick={() => setEditValue(key)}
+                        className={`p-3 text-sm font-medium rounded-lg border transition-colors ${
+                          editValue === key
+                            ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
+                            : 'bg-[var(--color-bg)] text-[var(--color-fg)] border-[color-mix(in_oklab,var(--color-accent)20%,transparent)] hover:border-[color-mix(in_oklab,var(--color-accent)40%,transparent)]'
+                        }`}
+                      >
+                        {ORIENTATION_RU[key]}
+                      </button>
+                    ))
+                  })()}
+                </div>
+              </div>
+            ) : editingField === 'heightCm' || editingField === 'weightKg' || editingField === 'wandSizeCm' ? (
+              <div className="space-y-4">
+                <div className="text-xs text-[color-mix(in_oklab,var(--color-fg)70%,var(--color-muted)30%)]">
+                  {editingField === 'heightCm' && 'Рост (130-220 см)'}
+                  {editingField === 'weightKg' && 'Вес (30-150 кг)'}
+                  {editingField === 'wandSizeCm' && 'Размер (3-30 см)'}
+                </div>
+                <div className="space-y-2">
+                  <input
+                    type="range"
+                    min={editingField === 'heightCm' ? 130 : editingField === 'weightKg' ? 30 : 3}
+                    max={editingField === 'heightCm' ? 220 : editingField === 'weightKg' ? 150 : 30}
+                    value={editValue || ''}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    className="slider w-full"
+                  />
+                  <div className="text-center">
+                    <span className="text-lg font-semibold text-[var(--color-fg)]">
+                      {editValue || 'Не указано'}
+                    </span>
+                    <span className="text-sm text-[color-mix(in_oklab,var(--color-fg)70%,var(--color-muted)30%)] ml-1">
+                      {editingField === 'heightCm' ? 'см' : editingField === 'weightKg' ? 'кг' : 'см'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="text-xs text-[color-mix(in_oklab,var(--color-fg)70%,var(--color-muted)30%)]">
+                  {editingField === 'displayName' && 'Имя (2-32 символа)'}
+                  {editingField === 'city' && 'Город (1-128 символов)'}
+                </div>
+                <input
+                  type="text"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  className="w-full p-3 border border-[color-mix(in_oklab,var(--color-accent)20%,transparent)] rounded-lg bg-[var(--color-bg)] text-[var(--color-fg)]"
+                  placeholder={editingField === 'displayName' ? 'Введите имя' : 'Введите город'}
+                  maxLength={editingField === 'displayName' ? 32 : 128}
+                />
+              </div>
+            )}
+            </BottomSheet>
+          </>
+        )}
+
+        {/* Модальное окно для репорта */}
+        {isReportModalVisible && (
+          <>
+            {/* Оверлей с анимацией */}
+            <div 
+              className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center px-4"
+              style={{
+                opacity: showReportModal ? 1 : 0,
+                transition: 'opacity 200ms ease-in-out'
+              }}
+            >
+              <div 
+                className="bg-[var(--color-bg)] rounded-lg max-w-sm w-full border border-[color-mix(in_oklab,var(--color-accent)20%,transparent)] shadow-lg"
+                style={{
+                  transform: showReportModal ? 'scale(1)' : 'scale(0.95)',
+                  opacity: showReportModal ? 1 : 0,
+                  transition: 'transform 200ms ease-in-out, opacity 200ms ease-in-out'
+                }}
+              >
+                {/* Заголовок */}
+                <div className="px-4 py-4 border-b border-[color-mix(in_oklab,var(--color-accent)15%,transparent)]">
+                  <h3 className="text-lg font-semibold text-[var(--color-fg)]">Пожаловаться на профиль</h3>
+                  <p className="text-sm text-[color-mix(in_oklab,var(--color-fg)70%,var(--color-muted)30%)] mt-1">
+                    Выберите причину жалобы
+                  </p>
+                </div>
+
+                {/* Контент */}
+                <div className="px-4 py-4 space-y-4 max-h-80 overflow-y-auto">
+                  {/* Причины репорта */}
+                  <div className="space-y-2">
+                    {[
+                      // Неподходящий контент
+                      { value: 'INAPPROPRIATE_CONTENT', label: 'Неподобающий контент' },
+                      { value: 'UNDERAGE', label: 'Провокационное или враждебное поведение' },
+                      { value: 'COPYRIGHT_VIOLATION', label: 'Возрастные ограничения (13-19)' },
+                      
+                      // Поведение
+                      { value: 'HARASSMENT', label: 'Домогательства и Харасмент' },
+                      { value: 'VIOLENCE', label: 'Обман и Мошенничество' },
+                      
+                      // Спам и реклама
+                      { value: 'SPAM', label: 'Флуд и спам' },
+                      { value: 'FAKE_PROFILE', label: 'Реклама' },
+                      
+                      // Прочее
+                      { value: 'OTHER', label: 'Другое' }
+                    ].map((reason) => (
+                      <label key={reason.value} className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="reportReason"
+                          value={reason.value}
+                          checked={reportReason === reason.value}
+                          onChange={(e) => setReportReason(e.target.value as ReportReasonEnum)}
+                          className="w-4 h-4 text-[var(--color-accent)] border-[color-mix(in_oklab,var(--color-accent)30%,transparent)] focus:ring-[var(--color-accent)]"
+                        />
+                        <span className="text-sm text-[var(--color-fg)]">{reason.label}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* Дополнительное описание */}
+                  <div className="space-y-2">
+                    <label className="text-sm text-[color-mix(in_oklab,var(--color-fg)70%,var(--color-muted)30%)]">
+                      Дополнительная информация (необязательно)
+                    </label>
+                    <textarea
+                      value={reportDescription}
+                      onChange={(e) => setReportDescription(e.target.value)}
+                      placeholder="Опишите проблему подробнее..."
+                      className="input resize-none"
+                      rows={3}
+                      maxLength={500}
+                    />
+                    <div className="text-xs text-[color-mix(in_oklab,var(--color-fg)50%,var(--color-muted)50%)] text-right">
+                      {reportDescription.length}/500
+                    </div>
+                  </div>
+                </div>
+
+                {/* Кнопки */}
+                <div className="px-4 py-4 border-t border-[color-mix(in_oklab,var(--color-accent)15%,transparent)] flex gap-3">
+                  <button
+                    onClick={handleReportCancel}
+                    className="btn flex-1"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    onClick={handleReportSubmit}
+                    disabled={!reportReason || isReporting}
+                    className="btn btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isReporting ? 'Отправка...' : 'Отправить'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
 
     </div>
   )

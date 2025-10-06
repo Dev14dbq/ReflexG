@@ -1,33 +1,39 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --color-bg: #ffffff; /* white */
+  --color-fg: #1b1b1b; /* near black for text */
+  --color-muted: #b0b0b0;
+  --color-accent: #769784; /* requested dark gray-green for light theme */
+  --color-accent-2: #769784; /* same family for borders/underlines */
+  --color-bg-secondary: #f8f9fa;
+  --color-border: #e9ecef;
+  --color-accent-hover: #6a8a76;
+  --color-accent-active: #5d7a68;
+  /* Gradient for chat pattern coloring */
+  --pattern-gradient-start: color-mix(in oklab, var(--color-accent) 80%, white 20%);
+  --pattern-gradient-end: color-mix(in oklab, var(--color-accent) 80%, black 20%);
+  /* Global URL for tiling pattern */
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+.dark:root {
+  --color-bg: #000000; /* black */
+  --color-fg: #ffffff; /* white */
+  --color-muted: #999999;
+  --color-accent: #ff9ff3; /* requested accent in dark */
+  --color-accent-2: #ff9ff3;
+  --color-bg-secondary: #1a1a1a;
+  --color-border: #333333;
+  --color-accent-hover: #ff8ce8;
+  --color-accent-active: #ff7ad8;
 }
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+html, body, #root { 
+  height: 100%;
+  overflow: hidden;
+}
+body { 
+  margin: 0; 
+  background: var(--color-bg); 
+  color: var(--color-fg); 
 }
 
 h1 {
@@ -52,6 +58,132 @@ button:hover {
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
+}
+
+/* Minimal components */
+.btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; border-radius: 0.375rem; border-width: 1px; transition: all .15s; border-color: color-mix(in oklab, var(--color-accent) 30%, transparent); color: var(--color-fg); }
+.btn:hover { border-color: var(--color-accent); }
+.btn-primary { background: var(--color-accent); color: #fff; }
+.btn-primary:hover { filter: brightness(0.95); }
+
+.input { width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.375rem; outline: none; background: color-mix(in oklab, var(--color-bg) 95%, var(--color-accent) 5%); border: 1px solid color-mix(in oklab, var(--color-accent) 30%, transparent); color: var(--color-fg); }
+.input:focus { border-color: var(--color-accent); box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 30%, transparent); }
+
+.label { font-size: 0.875rem; color: color-mix(in oklab, var(--color-fg) 70%, var(--color-muted) 30%); }
+
+.card { border-radius: 0.75rem; padding: 1rem; border: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent); }
+
+.divider { height: 1px; background: color-mix(in oklab, var(--color-accent) 15%, transparent); }
+
+.link { color: var(--color-accent); text-decoration: none; }
+.link:hover { text-decoration: underline; }
+
+/* Utility helpers */
+.text-muted { color: color-mix(in oklab, var(--color-fg) 50%, var(--color-muted) 50%); }
+.border-accent { border-color: var(--color-accent); }
+.underline-accent { text-decoration-color: var(--color-accent); }
+
+/* Background and border utilities */
+.bg-bg { background-color: var(--color-bg); }
+.bg-card { background-color: var(--color-bg-secondary); }
+.bg-accent { background-color: var(--color-accent); }
+.bg-accent-hover { background-color: var(--color-accent-hover); }
+.bg-accent-active { background-color: var(--color-accent-active); }
+
+.text-fg { color: var(--color-fg); }
+.text-white { color: white; }
+
+.border-border { border-color: var(--color-border); }
+
+.placeholder-muted::placeholder { color: var(--color-muted); }
+
+/* Animation utilities */
+.animate-bounce {
+  animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(-25%);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  50% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+/* Bot fade animation */
+.animate-bot-fade {
+  animation: botFade 0.5s ease-out forwards;
+}
+
+@keyframes botFade {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+/* Spacing utilities */
+.space-x-1 > * + * {
+  margin-left: 0.25rem;
+}
+
+/* Red color utilities */
+.text-red-500 { color: #ef4444; }
+.bg-red-50 { background-color: #fef2f2; }
+.dark .bg-red-900\/20 { background-color: rgba(127, 29, 29, 0.2); }
+
+/* Status colors */
+.bg-green-500 { background-color: #10b981; }
+.bg-yellow-500 { background-color: #f59e0b; }
+
+/* Gap utilities */
+.gap-2 { gap: 0.5rem; }
+
+/* Margin utilities */
+.ml-1 { margin-left: 0.25rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-4 { margin-bottom: 1rem; }
+
+/* Theme toggle button */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 30%, transparent);
+  background: color-mix(in oklab, var(--color-bg) 95%, var(--color-accent) 5%);
+  color: var(--color-fg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+}
+
+.theme-toggle:hover {
+  border-color: var(--color-accent);
+  background: color-mix(in oklab, var(--color-bg) 90%, var(--color-accent) 10%);
+  transform: scale(1.05);
+}
+
+.theme-toggle:active {
+  transform: scale(0.95);
+}
+
+.theme-toggle:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 @media (prefers-color-scheme: light) {

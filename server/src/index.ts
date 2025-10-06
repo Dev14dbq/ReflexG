@@ -1,21 +1,14 @@
-// src/index.ts
-import express from 'express';
-import dotenv from 'dotenv';
+import 'dotenv/config'
+import { startBot } from './bot'
+import { createApp } from '@/app'
+import { ENV } from '@/config/env'
+import { attachWsServer } from '@/ws/index'
 
-// Загружаем .env
-dotenv.config();
+const app = createApp()
+const server = app.listen(ENV.PORT, () => {
+  // eslint-disable-next-line no-console
+  console.log(`API on :${ENV.PORT}`)
+})
 
-const app = express();
-const PORT = Number(process.env.PORT) || 3001;
-
-app.get('/ping', (_req, res) => {
-  res.send('pong');
-});
-
-app.get('/', (_req, res) => {
-  res.send('Server is running!');
-});
-
-app.listen(PORT, () => {
-  console.log(`🚀 Listening on port ${PORT}`);
-});
+attachWsServer(server)
+startBot()

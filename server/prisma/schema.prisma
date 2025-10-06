@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -12,4 +6,287 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  telegramId      BigInt           @id
+  username        String?          @db.VarChar(64)
+  firstName       String?          @db.VarChar(64)
+  lastName        String?          @db.VarChar(64)
+  languageCode    String?          @db.VarChar(8)
+  isPremium       Boolean?
+  photoUrl        String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  customPhotoUrl  String?          @db.VarChar(512)
+  lastPhotoCheck  DateTime?
+  role            UserRole         @default(USER)
+  isBanned        Boolean          @default(false)
+  banReason       String?
+  bannedAt        DateTime?
+  chatMemberships ChatMember[]
+  likesReceived   Like[]           @relation("LikeTarget")
+  likesSent       Like[]
+  messagesSent    Message[]
+  moderations     ModerationItem[]
+  photos          Photo[]
+  profile         Profile?
+  blacklist       Blacklist[]      @relation("BlacklistUser")
+  blacklistedBy   Blacklist[]      @relation("BlacklistedBy")
+  userSettings    UserSettings?
+  reportsSent     Report[]         @relation("ReportReporter")
+  reportsReceived Report[]         @relation("ReportTarget")
+  reportsModerated Report[]        @relation("ReportModerator")
+}
+
+model Profile {
+  userId                      BigInt              @id
+  city                        String?             @db.VarChar(128)
+  displayName                 String?             @db.VarChar(32)
+  birthDate                   DateTime?
+  gender                      GenderIdentity?
+  sex                         Sex?
+  description                 String?
+  consentAcceptedAt           DateTime?
+  heightCm                    Int?
+  weightKg                    Int?
+  wandSizeCm                  Int?
+  initialModerationStatus     ModerationStatus    @default(PENDING)
+  initialModerationNote       String?
+  descriptionModerationStatus ModerationStatus    @default(PENDING)
+  descriptionModerationNote   String?
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
+  user                        User                @relation(fields: [userId], references: [telegramId], onDelete: Cascade)
+  lookingFor                  ProfileLookingFor[]
+}
+
+model ChatSettings {
+  userId                      BigInt              @id
+  pinned                      String[]        
+  archive                     String[]
+  topic                       String?
+}
+
+model Photo {
+  id        String           @id @default(cuid())
+  userId    BigInt
+  url       String
+  position  Int
+  status    ModerationStatus @default(PENDING)
+  note      String?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [telegramId], onDelete: Cascade)
+
+  @@unique([userId, position])
+}
+
+model ProfileLookingFor {
+  profileId BigInt
+  option    LookingFor
+  profile   Profile    @relation(fields: [profileId], references: [userId], onDelete: Cascade)
+
+  @@id([profileId, option])
+}
+
+model ModerationItem {
+  id         String             @id @default(cuid())
+  userId     BigInt
+  type       ModerationItemType
+  status     ModerationStatus   @default(PENDING)
+  payload    Json
+  createdAt  DateTime           @default(now())
+  resolvedAt DateTime?
+  reason     String?
+  user       User               @relation(fields: [userId], references: [telegramId], onDelete: Cascade)
+
+  @@index([userId, status, type])
+}
+
+model GenderCompatibility {
+  from GenderIdentity
+  to   GenderIdentity
+
+  @@id([from, to])
+}
+
+model Chat {
+  id            String       @id @default(cuid())
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  lastMessageAt DateTime?
+  isDialog      Boolean      @default(true)
+  isArchived    Boolean      @default(false)
+  members       ChatMember[]
+  messages      Message[]
+
+  @@index([lastMessageAt])
+}
+
+model ChatMember {
+  chatId            String
+  userId            BigInt
+  joinedAt          DateTime @default(now())
+  lastReadMessageId String?
+  chat              Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [telegramId], onDelete: Cascade)
+
+  @@id([chatId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id          String              @id @default(cuid())
+  chatId      String
+  senderId    BigInt
+  text        String?
+  photoUrl    String?
+  createdAt   DateTime            @default(now())
+  deletedAt   DateTime?
+  chat        Chat                @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender      User                @relation(fields: [senderId], references: [telegramId], onDelete: Cascade)
+  attachments MessageAttachment[]
+  reports     Report[]
+
+  @@index([chatId, createdAt])
+}
+
+model MessageAttachment {
+  id        String   @id @default(cuid())
+  messageId String
+  kind      String
+  url       String
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model Like {
+  userId       BigInt
+  targetUserId BigInt
+  isLike       Boolean
+  createdAt    DateTime  @default(now())
+  matchedAt    DateTime?
+  target       User      @relation("LikeTarget", fields: [targetUserId], references: [telegramId], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [telegramId], onDelete: Cascade)
+
+  @@id([userId, targetUserId])
+  @@index([targetUserId])
+}
+
+model Blacklist {
+  userId       BigInt
+  blockedUserId BigInt
+  createdAt    DateTime  @default(now())
+  user         User      @relation("BlacklistUser", fields: [userId], references: [telegramId], onDelete: Cascade)
+  blockedUser  User      @relation("BlacklistedBy", fields: [blockedUserId], references: [telegramId], onDelete: Cascade)
+
+  @@id([userId, blockedUserId])
+  @@index([blockedUserId])
+}
+
+model UserSettings {
+  userId                        BigInt              @id
+  autoDeleteMessages           AutoDeletePeriod?   @default(NEVER)
+  allowDataForTraining         Boolean             @default(true)
+  createdAt                    DateTime            @default(now())
+  updatedAt                    DateTime            @updatedAt
+  user                         User                @relation(fields: [userId], references: [telegramId], onDelete: Cascade)
+}
+
+model Report {
+  id              String       @id @default(cuid())
+  reporterId      BigInt
+  reportedUserId  BigInt
+  reportType      ReportType
+  reason          ReportReason
+  description     String?
+  messageId       String?
+  status          ReportStatus @default(PENDING)
+  moderatorId     BigInt?
+  moderatorNote   String?
+  createdAt       DateTime     @default(now())
+  resolvedAt      DateTime?
+  reporter        User         @relation("ReportReporter", fields: [reporterId], references: [telegramId], onDelete: Cascade)
+  reportedUser    User         @relation("ReportTarget", fields: [reportedUserId], references: [telegramId], onDelete: Cascade)
+  moderator       User?        @relation("ReportModerator", fields: [moderatorId], references: [telegramId], onDelete: SetNull)
+  message         Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([reporterId])
+  @@index([reportedUserId])
+  @@index([status])
+  @@index([reportType])
+}
+
+enum GenderIdentity {
+  GAY
+  LESBIAN
+  BISEXUAL
+  PANSEXUAL
+  QUEER
+  ASEXUAL
+}
+
+enum Sex {
+  MALE
+  FEMALE
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DISCREPANT
+}
+
+enum ModerationItemType {
+  INITIAL
+  PROFILE_DESCRIPTION
+  PROFILE_EDIT
+  PHOTOS
+}
+
+enum LookingFor {
+  LONG_DISTANCE
+  LOCAL
+  SEX
+  COMMUNICATION
+  EXCHANGE
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum AutoDeletePeriod {
+  NEVER
+  DAY
+  WEEK
+  MONTH
+}
+
+enum ReportType {
+  PROFILE
+  MESSAGE
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  INAPPROPRIATE_CONTENT
+  FAKE_PROFILE
+  UNDERAGE
+  VIOLENCE
+  COPYRIGHT_VIOLATION
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  INVESTIGATING
 }

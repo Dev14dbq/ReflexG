@@ -73,4 +73,15 @@ router.post('/cdn/upload', upload.single('file'), (req: express.Request, res: ex
 
 export const cdnRouter = router
 
+// helper to delete a CDN file by filename
+export function deleteCdnFileByFilename(filename: string): void {
+  try {
+    if (!filename) return
+    const filePath = path.join(CDN_DIR, path.basename(filename))
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath)
+    }
+  } catch {}
+}
+
 

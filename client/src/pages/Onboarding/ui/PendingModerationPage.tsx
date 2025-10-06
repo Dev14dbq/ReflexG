@@ -39,12 +39,12 @@ export default function PendingModerationPage(): JSX.Element {
           >
             <img
               src="https://cdn.spectrmod.ru/Spectr.jpg"
-              alt="Spectr Reflex"
+              alt="Spectr Okeano"
               width={28}
               height={28}
               style={{ borderRadius: '100px' }}
             />
-            <span className="text-lg">Spectr Reflex</span>
+            <span className="text-lg">Spectr Okeano</span>
           </button>
         </div>
       </div>

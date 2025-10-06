@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { verifyTelegramInitData } from '@/lib/auth/verifyTelegramInitData'
 import { ENV } from '@/config/env'
 import type { Prisma } from '../../generated/prisma'
+import { deleteCdnFileByFilename } from '@/routes/cdn'
 
 const router = express.Router()
 
@@ -16,6 +17,7 @@ const SubmitBaseProfileDto = z.object({
   birthDate: z.string().regex(/^\d{2}\/\d{2}\/\d{4}$/), // DD/MM/YYYY
   gender: z.enum(['GAY','LESBIAN','BISEXUAL','PANSEXUAL','QUEER','ASEXUAL']),
   sex: z.enum(['MALE','FEMALE']).nullable().optional(),
+  secondaryGender: z.enum(['GAY','LESBIAN','BISEXUAL','PANSEXUAL','QUEER','ASEXUAL']).nullable().optional(),
   photos: z.array(z.object({ url: z.string().url() })).length(3),
 })
 
@@ -27,7 +29,7 @@ const SubmitDetailsDto = z.object({
   consentAccepted: z.literal(true),
   lookingFor: z.array(LookingForEnum).max(5).optional().default([]),
   heightCm: z.number().int().min(130).max(220).optional(),
-  weightKg: z.number().int().min(30).max(300).optional(),
+  weightKg: z.number().int().min(30).max(150).optional(),
   wandSizeCm: z.number().int().min(3).max(30).optional(),
 })
 
@@ -39,6 +41,53 @@ const UpdateAvatarDto = z.object({
 
 const RemoveCustomAvatarDto = z.object({
   initData: z.string().min(1),
+})
+
+// Схема для отправки репорта профиля
+const ReportProfileDto = z.object({
+  initData: z.string().min(1),
+  reportedUserId: z.string().min(1),
+  reason: z.enum(['SPAM', 'HARASSMENT', 'INAPPROPRIATE_CONTENT', 'FAKE_PROFILE', 'UNDERAGE', 'VIOLENCE', 'COPYRIGHT_VIOLATION', 'OTHER']),
+  description: z.string().max(500).optional(),
+})
+
+// ===== Profile My (GET/PATCH) DTOs =====
+
+const GetMyProfileQuery = z.object({
+  initData: z.string().min(1)
+})
+
+const GenderIdentityEnum = z.enum(['GAY','LESBIAN','BISEXUAL','PANSEXUAL','QUEER','ASEXUAL'])
+
+const PatchMyProfileDto = z.object({
+  initData: z.string().min(1),
+  // Replace-only text fields (non-empty if present)
+  displayName: z.string().min(2).max(32).optional(),
+  city: z.string().min(1).max(128).optional(),
+  bio: z.string().min(1).max(1200).optional(),
+  gender: GenderIdentityEnum.optional(),
+  // Physical data: can be number or null (null = delete value)
+  heightCm: z.number().int().min(130).max(220).nullable().optional(),
+  weightKg: z.number().int().min(30).max(150).nullable().optional(),
+  wandSizeCm: z.number().int().min(3).max(30).nullable().optional(),
+  // Photos: full replacement/reorder, must keep at least 1 photo
+  photos: z.array(z.string().url()).min(1).optional(),
+  // Explicitly forbid age/birthDate edits via validation step below
+  age: z.any().optional(),
+  birthDate: z.any().optional(),
+}).superRefine((data, ctx) => {
+  // Forbid passing age/birthDate at all
+  if (typeof data.age !== 'undefined') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'age is not editable', path: ['age'] })
+  }
+  if (typeof data.birthDate !== 'undefined') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'birthDate is not editable', path: ['birthDate'] })
+  }
+  // Forbid empty values for required textual fields if present
+  const empty = (v: unknown) => typeof v === 'string' && v.trim().length === 0
+  if (empty(data.displayName)) ctx.addIssue({ code: z.ZodIssueCode.too_small, minimum: 1, type: 'string', inclusive: true, path: ['displayName'], message: 'displayName cannot be empty' })
+  if (empty(data.city)) ctx.addIssue({ code: z.ZodIssueCode.too_small, minimum: 1, type: 'string', inclusive: true, path: ['city'], message: 'city cannot be empty' })
+  if (empty(data.bio)) ctx.addIssue({ code: z.ZodIssueCode.too_small, minimum: 1, type: 'string', inclusive: true, path: ['bio'], message: 'bio cannot be empty' })
 })
 
 // ===== Helpers =====
@@ -100,11 +149,166 @@ async function checkTelegramAvatarFreshness(userId: BigInt, currentPhotoUrl: str
 
 // ===== Routes =====
 
+// GET /profile/my — returns full profile with photos
+router.get('/profile/my', async (req: express.Request, res: express.Response) => {
+  const parsed = GetMyProfileQuery.safeParse({ initData: req.query.initData })
+  if (!parsed.success) return res.status(400).json({ message: 'initData is required' })
+
+  const token = ENV.TELEGRAM_BOT_TOKEN
+  if (!token) return res.status(500).json({ message: 'Server misconfigured: TELEGRAM_BOT_TOKEN is not set' })
+
+  const verification = verifyTelegramInitData(parsed.data.initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
+  if (!verification.ok || !verification.user) return res.status(401).json({ message: 'Unauthorized' })
+
+  try {
+    const userId = BigInt(verification.user.id)
+
+    const user = await prisma.user.findUnique({
+      where: { telegramId: userId },
+      select: {
+        telegramId: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        photoUrl: true,
+        customPhotoUrl: true,
+        profile: {
+          select: {
+            displayName: true,
+            city: true,
+            description: true,
+            gender: true,
+            heightCm: true,
+            weightKg: true,
+            wandSizeCm: true,
+            initialModerationStatus: true,
+            descriptionModerationStatus: true,
+          }
+        },
+        photos: {
+          orderBy: { position: 'asc' },
+          select: { url: true, position: true }
+        }
+      }
+    })
+
+    if (!user) return res.status(404).json({ message: 'User not found' })
+
+    const photos = (user.photos || []).sort((a, b) => a.position - b.position).map(p => p.url)
+
+    return res.json({
+      ok: true,
+      profile: {
+        displayName: user.profile?.displayName ?? null,
+        city: user.profile?.city ?? null,
+        bio: user.profile?.description ?? null,
+        gender: user.profile?.gender ?? null,
+        heightCm: user.profile?.heightCm ?? null,
+        weightKg: user.profile?.weightKg ?? null,
+        wandSizeCm: user.profile?.wandSizeCm ?? null,
+        photos,
+        moderation: {
+          base: user.profile?.initialModerationStatus ?? null,
+          description: user.profile?.descriptionModerationStatus ?? null
+        }
+      }
+    })
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error(e)
+    return res.status(500).json({ message: 'Internal error' })
+  }
+})
+
+// PATCH /profile/my — queues moderation items for edits and photos
+router.patch('/profile/my', async (req: express.Request, res: express.Response) => {
+  const parsed = PatchMyProfileDto.safeParse(req.body)
+  if (!parsed.success) return res.status(422).json({ message: 'Invalid payload', issues: parsed.error.issues })
+
+  const token = ENV.TELEGRAM_BOT_TOKEN
+  if (!token) return res.status(500).json({ message: 'Server misconfigured: TELEGRAM_BOT_TOKEN is not set' })
+
+  const verification = verifyTelegramInitData(parsed.data.initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
+  if (!verification.ok || !verification.user) return res.status(401).json({ message: 'Unauthorized' })
+
+  const userId = BigInt(verification.user.id)
+
+  // Prepare payloads
+  const { initData: _ignored, age: _a, birthDate: _b, photos, ...fields } = parsed.data as any
+
+  // Validate that forbidden empties are not set to empty strings
+  const forbidEmpty = (v: unknown) => typeof v === 'string' && v.trim().length === 0
+  if (forbidEmpty(fields.displayName) || forbidEmpty(fields.city) || forbidEmpty(fields.bio)) {
+    return res.status(422).json({ message: 'Empty value not allowed for displayName/city/bio' })
+  }
+
+  // Validate photos non-empty if provided
+  if (Array.isArray(photos) && photos.length < 1) {
+    return res.status(422).json({ message: 'photos must contain at least 1 item' })
+  }
+
+  try {
+    const results: { editQueued?: boolean; photosQueued?: boolean } = {}
+
+    await prisma.$transaction(async (tx) => {
+      // Ensure profile exists
+      const prof = await tx.profile.findUnique({ where: { userId } })
+      if (!prof) {
+        throw Object.assign(new Error('Profile not found'), { status: 404 })
+      }
+
+      // Queue PROFILE_EDIT moderation if there are non-photo fields
+      const editPayload: Record<string, unknown> = {}
+      const editableKeys = ['displayName','city','bio','gender','heightCm','weightKg','wandSizeCm'] as const
+      for (const key of editableKeys) {
+        if (Object.prototype.hasOwnProperty.call(fields, key)) {
+          (editPayload as any)[key] = (fields as any)[key]
+        }
+      }
+      if (Object.keys(editPayload).length > 0) {
+        const existing = await tx.moderationItem.findFirst({ where: { userId, type: 'PROFILE_EDIT', status: 'PENDING' }, orderBy: { createdAt: 'desc' } })
+        if (existing) {
+          // merge payloads (last-write-wins per field)
+          const prev = (existing.payload as Record<string, unknown>) || {}
+          const merged = { ...prev, ...editPayload }
+          await tx.moderationItem.update({ where: { id: existing.id }, data: { payload: merged as Prisma.InputJsonValue } })
+        } else {
+          await tx.moderationItem.create({ data: { userId, type: 'PROFILE_EDIT', status: 'PENDING', payload: editPayload as Prisma.InputJsonValue } })
+        }
+        results.editQueued = true
+      }
+
+      // Queue PHOTOS moderation if photos provided
+      if (Array.isArray(photos)) {
+        const photosPayload = { photos: photos.map((url, i) => ({ url, position: i })) }
+        const existingPhotos = await tx.moderationItem.findFirst({ where: { userId, type: 'PHOTOS', status: 'PENDING' }, orderBy: { createdAt: 'desc' } })
+        if (existingPhotos) {
+          const prev = (existingPhotos.payload as Record<string, unknown>) || {}
+          const merged = { ...prev, ...photosPayload }
+          await tx.moderationItem.update({ where: { id: existingPhotos.id }, data: { payload: merged as Prisma.InputJsonValue } })
+        } else {
+          await tx.moderationItem.create({ data: { userId, type: 'PHOTOS', status: 'PENDING', payload: photosPayload as Prisma.InputJsonValue } })
+        }
+        results.photosQueued = true
+      }
+    })
+
+    return res.json({ ok: true, ...results })
+  } catch (e: any) {
+    // eslint-disable-next-line no-console
+    console.error(e)
+    if (e && typeof e.status === 'number') {
+      return res.status(e.status).json({ message: e.message || 'Error' })
+    }
+    return res.status(500).json({ message: 'Internal error' })
+  }
+})
+
 router.post('/profile/submit-base', async (req: express.Request, res: express.Response) => {
   const parsed = SubmitBaseProfileDto.safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ message: 'Invalid payload', issues: parsed.error.issues })
 
-  const { initData, city, displayName, birthDate, gender, sex, photos } = parsed.data
+  const { initData, city, displayName, birthDate, gender, sex, photos, secondaryGender } = parsed.data
 
   const token = ENV.TELEGRAM_BOT_TOKEN
   if (!token) return res.status(500).json({ message: 'Server misconfigured: TELEGRAM_BOT_TOKEN is not set' })
@@ -187,6 +391,7 @@ router.post('/profile/submit-base', async (req: express.Request, res: express.Re
             displayName,
             birthDate,
             gender,
+            secondaryGender: secondaryGender ?? null,
             sex: sex ?? null,
             photos,
           },
@@ -241,18 +446,89 @@ router.post('/profile/status', async (req: express.Request, res: express.Respons
   let status: string = 'READY'
   if (base === 'PENDING') status = 'UNDER_REVIEW_BASE'
   else if (base === 'REJECTED') status = 'BASE_DECLINED'
+  else if (base === 'DISCREPANT') status = 'BASE_DISCREPANT'
   else if (base === 'APPROVED') {
     // после первой модерации даём шаг описания
     const pendingDesc = await prisma.moderationItem.count({ where: { userId, type: 'PROFILE_DESCRIPTION', status: 'PENDING' } })
-    if (!profile.description) {
-      status = pendingDesc > 0 ? 'UNDER_REVIEW_DESC' : 'NEED_DESCRIPTION'
+    
+    // Показываем ожидание модерации описания ТОЛЬКО если статус профиля PENDING и реально есть PENDING-элемент
+    if (desc === 'PENDING' && pendingDesc > 0) {
+      status = 'UNDER_REVIEW_DESC'
+    } else if (desc === 'REJECTED') {
+      status = 'DESC_DECLINED'
+    } else if (desc === 'DISCREPANT') {
+      status = 'DESC_DISCREPANT'
+    } else if (!profile.description) {
+      // Если нет описания и нет модерации, просим заполнить
+      status = 'NEED_DESCRIPTION'
     } else {
-      if (desc === 'PENDING' || pendingDesc > 0) status = 'UNDER_REVIEW_DESC'
-      else if (desc === 'REJECTED') status = 'DESC_DECLINED'
-      else status = 'READY'
+      // Описание есть и нет ожидающих модераций — готово
+      status = 'READY'
     }
   }
   return res.json({ ok: true, status })
+})
+
+// Отправка данных описания/деталей профиля на модерацию (этап 2)
+router.post('/profile/submit-details', async (req: express.Request, res: express.Response) => {
+  const parsed = SubmitDetailsDto.safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid payload', issues: parsed.error.issues })
+
+  const { initData, description, consentAccepted, lookingFor, heightCm, weightKg, wandSizeCm } = parsed.data
+
+  const token = ENV.TELEGRAM_BOT_TOKEN
+  if (!token) return res.status(500).json({ message: 'Server misconfigured: TELEGRAM_BOT_TOKEN is not set' })
+
+  const verification = verifyTelegramInitData(initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
+  if (!verification.ok || !verification.user) return res.status(401).json({ message: 'Unauthorized' })
+
+  try {
+    const userId = BigInt(verification.user.id)
+
+    const existingProfile = await prisma.profile.findUnique({ where: { userId } })
+    if (!existingProfile) {
+      return res.status(400).json({ message: 'Base profile not found' })
+    }
+
+    // Этап 2 доступен только после одобрения базовой анкеты
+    if (existingProfile.initialModerationStatus !== 'APPROVED') {
+      return res.status(400).json({ message: 'Base profile is not approved yet' })
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Обновляем профиль: статус описания -> PENDING, сохраняем согласие
+      await tx.profile.update({
+        where: { userId },
+        data: {
+          descriptionModerationStatus: 'PENDING',
+          descriptionModerationNote: null,
+          consentAcceptedAt: consentAccepted ? new Date() : existingProfile.consentAcceptedAt ?? null,
+        }
+      })
+
+      // Создаём элемент модерации типа PROFILE_DESCRIPTION с payload
+      await tx.moderationItem.create({
+        data: {
+          userId,
+          type: 'PROFILE_DESCRIPTION',
+          status: 'PENDING',
+          payload: {
+            description,
+            lookingFor: Array.isArray(lookingFor) ? lookingFor : [],
+            heightCm: heightCm ?? null,
+            weightKg: weightKg ?? null,
+            wandSizeCm: wandSizeCm ?? null,
+          }
+        }
+      })
+    })
+
+    return res.json({ ok: true, status: 'UNDER_REVIEW_DESC' })
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error(e)
+    return res.status(500).json({ message: 'Internal error' })
+  }
 })
 
 // ===== Admin moderation v1 =====
@@ -277,9 +553,57 @@ router.post('/admin/profile/base/moderate', async (req: express.Request, res: ex
 
   const newStatus = approve ? 'APPROVED' : 'REJECTED'
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // Обновляем модерацию
     await tx.moderationItem.update({ where: { id: item.id }, data: { status: newStatus, resolvedAt: new Date(), reason: reason ?? null } })
+
+    if (!approve) {
+      // При отклонении анкеты без бана – удаляем фото из БД и с диска, удаляем профиль
+      const photos = await tx.photo.findMany({ where: { userId }, select: { url: true } })
+      await tx.photo.deleteMany({ where: { userId } })
+      await tx.profile.deleteMany({ where: { userId } })
+      // вне транзакции удалим физические файлы (по возможности)
+      for (const p of photos) {
+        try {
+          const url = p.url || ''
+          const filename = url.split('/').pop() || ''
+          deleteCdnFileByFilename(filename)
+        } catch {}
+      }
+      return
+    }
+
+    // При одобрении – обновляем профиль и фото статусами
     await tx.profile.update({ where: { userId }, data: { initialModerationStatus: newStatus, initialModerationNote: reason ?? null } })
     await tx.photo.updateMany({ where: { userId }, data: { status: newStatus } })
+  })
+
+  return res.json({ ok: true })
+})
+
+// Dev-only: approve/decline PROFILE_DESCRIPTION moderation by userId
+const AdminModerateDescDto = z.object({
+  userId: z.coerce.bigint(),
+  approve: z.boolean(),
+  reason: z.string().max(1000).optional(),
+})
+
+router.post('/admin/profile/description/moderate', async (req: express.Request, res: express.Response) => {
+  // TODO: add admin auth and RBAC
+  const parsed = AdminModerateDescDto.safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid payload', issues: parsed.error.issues })
+  const { userId, approve, reason } = parsed.data
+
+  const item = await prisma.moderationItem.findFirst({
+    where: { userId, type: 'PROFILE_DESCRIPTION', status: 'PENDING' },
+    orderBy: { createdAt: 'asc' }
+  })
+  if (!item) return res.status(404).json({ message: 'Nothing to moderate' })
+
+  const newStatus = approve ? 'APPROVED' : 'REJECTED'
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.moderationItem.update({ where: { id: item.id }, data: { status: newStatus, resolvedAt: new Date(), reason: reason ?? null } })
+
+    await tx.profile.update({ where: { userId }, data: { descriptionModerationStatus: newStatus, descriptionModerationNote: reason ?? null } })
   })
 
   return res.json({ ok: true })
@@ -454,6 +778,72 @@ router.get('/profile/me', async (req: express.Request, res: express.Response) =>
         isAdmin: user.role === 'ADMIN'
       }
     })
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error(e)
+    return res.status(500).json({ message: 'Internal error' })
+  }
+})
+
+// ===== Report Profile =====
+
+// Отправка репорта профиля
+router.post('/profile/report', async (req: express.Request, res: express.Response) => {
+  const parsed = ReportProfileDto.safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid payload', issues: parsed.error.issues })
+
+  const { initData, reportedUserId, reason, description } = parsed.data
+
+  const token = ENV.TELEGRAM_BOT_TOKEN
+  if (!token) return res.status(500).json({ message: 'Server misconfigured: TELEGRAM_BOT_TOKEN is not set' })
+
+  const verification = verifyTelegramInitData(initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
+  if (!verification.ok || !verification.user) return res.status(401).json({ message: 'Unauthorized' })
+
+  try {
+    const reporterId = BigInt(verification.user.id)
+    const targetUserId = BigInt(reportedUserId)
+
+    // Проверяем, что пользователь не репортит сам себя
+    if (reporterId === targetUserId) {
+      return res.status(400).json({ message: 'Cannot report yourself' })
+    }
+
+    // Проверяем, что целевой пользователь существует
+    const targetUser = await prisma.user.findUnique({
+      where: { telegramId: targetUserId },
+      select: { telegramId: true }
+    })
+    if (!targetUser) {
+      return res.status(404).json({ message: 'Reported user not found' })
+    }
+
+    // Проверяем, не отправлял ли уже этот пользователь репорт на этого же пользователя
+    const existingReport = await prisma.report.findFirst({
+      where: {
+        reporterId,
+        reportedUserId: targetUserId,
+        reportType: 'PROFILE',
+        status: 'PENDING'
+      }
+    })
+    if (existingReport) {
+      return res.status(400).json({ message: 'You have already reported this profile' })
+    }
+
+    // Создаем репорт
+    await prisma.report.create({
+      data: {
+        reporterId,
+        reportedUserId: targetUserId,
+        reportType: 'PROFILE',
+        reason,
+        description: description || null,
+        status: 'PENDING'
+      }
+    })
+
+    return res.json({ ok: true, message: 'Report submitted successfully' })
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error(e)

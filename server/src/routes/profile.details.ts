@@ -13,7 +13,7 @@ const SubmitDetailsDto = z.object({
   consentAccepted: z.literal(true),
   lookingFor: z.array(LookingForEnum).max(5).optional().default([]),
   heightCm: z.number().int().min(130).max(220).optional(),
-  weightKg: z.number().int().min(30).max(300).optional(),
+  weightKg: z.number().int().min(30).max(150).optional(),
   wandSizeCm: z.number().int().min(3).max(30).optional(),
 })
 

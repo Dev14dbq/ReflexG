@@ -23,12 +23,20 @@ export default function ProfileDropdown({ isOpen, onClose, triggerRef, onAvatarC
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState<boolean>(false)
+  const [isVisible, setIsVisible] = useState<boolean>(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (isOpen) {
+      setIsVisible(true)
       loadAvatar()
+    } else {
+      // Добавляем задержку для завершения анимации исчезновения
+      const timer = setTimeout(() => {
+        setIsVisible(false)
+      }, 200) // Увеличиваем до 200ms для полного завершения анимации
+      return () => clearTimeout(timer)
     }
   }, [isOpen])
 
@@ -150,18 +158,20 @@ export default function ProfileDropdown({ isOpen, onClose, triggerRef, onAvatarC
     }
   }
 
-  if (!isOpen) return null
-
   return (
     <>
-      <div 
-        ref={dropdownRef}
-        className="absolute top-full left-0 mt-2 bg-[var(--color-bg)] border border-[color-mix(in_oklab,var(--color-accent)20%,transparent)] rounded-lg shadow-lg z-50 overflow-hidden"
-        style={{ 
-          minWidth: '200px',
-          maxWidth: 'calc(100vw - 2rem)'
-        }}
-      >
+      {(isOpen || isVisible) && (
+        <div 
+          ref={dropdownRef}
+          className={`absolute top-full left-0 mt-2 bg-[var(--color-bg)] border border-[color-mix(in_oklab,var(--color-accent)20%,transparent)] rounded-lg shadow-lg z-50 overflow-hidden w-full transition-all duration-200 ease-out ${
+            isOpen && isVisible
+              ? 'opacity-100 scale-100 translate-y-0' 
+              : 'opacity-0 scale-95 -translate-y-2'
+          }`}
+          style={{ 
+            minWidth: '200px'
+          }}
+        >
         {/* Заголовок */}
         <div className="px-4 py-3 border-b border-[color-mix(in_oklab,var(--color-accent)15%,transparent)]">
           <div className="text-sm font-medium text-[var(--color-fg)]">Фото профиля</div>
@@ -211,7 +221,8 @@ export default function ProfileDropdown({ isOpen, onClose, triggerRef, onAvatarC
             {avatar.isCustom ? 'Используется загруженное фото' : 'Используется фото из Telegram'}
           </div>
         </div>
-      </div>
+        </div>
+      )}
     </>
   )
 }

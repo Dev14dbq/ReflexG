@@ -10,7 +10,7 @@ export default function BottomNav(): JSX.Element {
   return (
     <nav className="fixed bottom-0 left-0 right-0" style={{ background: 'var(--color-bg)' }}>
       <div className="max-w-md mx-auto grid grid-cols-4">
-        <NavLink to="/messages" className={({ isActive }) => cn(isActive)}>
+        <NavLink to="/chat" className={({ isActive }) => cn(isActive)}>
           <RiChat3Line size={22} className="transition-transform duration-200 ease-out" />
           <span className="text-xs">Сообщения</span>
         </NavLink>

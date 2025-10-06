@@ -52,7 +52,7 @@ export default function ChatPage(): JSX.Element {
       const chatSettings:settingsChatResponse = await fetchChatSettings(telegramInitData)
       
       if (chatSettings) {
-        setWallpaper(chatSettings.settings.topic)
+        setWallpaper(chatSettings.settings.topic!)
       }
     }
 
@@ -82,6 +82,16 @@ export default function ChatPage(): JSX.Element {
     }
 
     loadMessageHistory()
+  }, [chatId])
+
+  /* Загрузка черновика при входе в чат */
+  useEffect(() => {
+    if (!chatId) return
+
+    const savedDraft = localStorage.getItem(`chat_${chatId}_Draft`)
+    if (savedDraft) {
+      setInputMessage(savedDraft)
+    }
   }, [chatId])
 
   /* Подписка на WebSocket события чата */
@@ -159,6 +169,7 @@ export default function ChatPage(): JSX.Element {
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    localStorage.setItem(`chat_${chatId}_Draft`, e.target.value)
     setInputMessage(e.target.value)
   }
 
@@ -183,6 +194,8 @@ export default function ChatPage(): JSX.Element {
       }
     })
     
+    // Очищаем черновик после отправки сообщения
+    localStorage.removeItem(`chat_${chatId}_Draft`)
     setInputMessage('')
   }
 
@@ -463,7 +476,7 @@ export default function ChatPage(): JSX.Element {
         <div className={styles.composerInner}>
           <div className={styles.inputWrapper}>
             <button 
-              className={styles.sendButton} 
+              className={styles.chatButtons} 
               aria-label="Добавить фото" 
               onClick={handleSendMessage}
             >
@@ -494,15 +507,19 @@ export default function ChatPage(): JSX.Element {
           </div>
 
           <button 
-            className={styles.sendButton} 
+            className={styles.chatButtons} 
             aria-label="Отправить" 
             onClick={handleSendMessage} 
             disabled={!inputMessage.trim()}
+            style={{
+              opacity: !inputMessage.trim() ? 0.5 : 1,
+              pointerEvents: !inputMessage.trim() ? 'none' : 'auto'
+            }}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               version="1.0"
-              width="30"
+              width="27"
               height="30"
               viewBox="0 0 48 48"
               preserveAspectRatio="xMidYMid meet">

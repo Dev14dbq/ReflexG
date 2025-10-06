@@ -33,7 +33,7 @@ prisma/migrations/
 tmp/
 temp/
 
-# lock files (если не хочешь их коммитить)
+# lock files
 package-lock.json
 pnpm-lock.yaml
 yarn.lock

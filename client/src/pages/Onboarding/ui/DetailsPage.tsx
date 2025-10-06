@@ -103,12 +103,10 @@ export default function DetailsPage(): JSX.Element {
       } as any)
       if (!resp.ok) throw new Error(resp.message || 'Ошибка отправки')
       
-      toast.success('Вы успешно зарегистрировались на нашей платформе! Через 5 секунд вы будете перенаправлены на главный экран.')
+      toast.success('Вы успешно зарегистрировались на нашей платформе!')
       
-      // Перенаправление через 5 секунд (через полную перезагрузку приложения)
-      setTimeout(() => {
-        window.location.replace('/')
-      }, 5000)
+      // Сразу перенаправляем на главный экран
+      window.location.replace('/')
 
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Неизвестная ошибка')
@@ -179,7 +177,7 @@ export default function DetailsPage(): JSX.Element {
               <div>
                 <div className="text-3xl font-bold text-center cursor-pointer" onClick={() => setWeight('')}>{typeof weight === 'number' ? `${weight} кг` : '-'}</div>
                 <div className="label mb-1 text-center">Вес</div>
-                <input type="range" min={30} max={300} value={typeof weight === 'number' ? weight : 70} onChange={e => setWeight(Number(e.target.value))} className="w-full slider" />
+                <input type="range" min={40} max={150} value={typeof weight === 'number' ? weight : 70} onChange={e => setWeight(Number(e.target.value))} className="w-full slider" />
               </div>
               {allowSex ? (
                 <div>

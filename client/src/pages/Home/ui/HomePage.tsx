@@ -6,7 +6,7 @@ import { TelegramUserCard } from '@/widgets/TelegramUserCard/ui/TelegramUserCard
 export default function HomePage(): JSX.Element {
   return (
     <Container>
-      Главная страница
+      <h1 className="text-xl font-semibold text-[var(--color-fg)] mb-4">Главная страница</h1>
       <div className="mt-4">
         <TelegramUserCard />
       </div>

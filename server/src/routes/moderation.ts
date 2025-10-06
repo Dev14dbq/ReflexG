@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { safeParseDate, isValidDate } from '@/lib/dateUtils'
 import { Bot } from 'grammy'
 import { ENV } from '@/config/env'
+import { deleteCdnFileByFilename } from '@/routes/cdn'
 
 const router = express.Router()
 
@@ -274,6 +275,29 @@ router.post('/item/status', requireModerator, async (req: express.Request, res: 
         data: { descriptionModerationStatus: 'APPROVED' }
       })
     }
+
+    // Если отмечаем как DISCREPANT, устанавливаем соответствующий статус в профиле
+    if (status === 'DISCREPANT') {
+      if (item.type === 'INITIAL') {
+        await prisma.profile.update({
+          where: { userId: item.userId },
+          data: { 
+            initialModerationStatus: 'DISCREPANT',
+            initialModerationNote: reason || null
+          }
+        })
+        console.log(`[MODERATION] Marked profile as DISCREPANT for user ${item.userId}`)
+      } else if (item.type === 'PROFILE_DESCRIPTION') {
+        await prisma.profile.update({
+          where: { userId: item.userId },
+          data: { 
+            descriptionModerationStatus: 'DISCREPANT',
+            descriptionModerationNote: reason || null
+          }
+        })
+        console.log(`[MODERATION] Marked description as DISCREPANT for user ${item.userId}`)
+      }
+    }
     
     // Если отклоняем и нужно забанить пользователя
     if (status === 'REJECTED' && banUser) {
@@ -290,35 +314,48 @@ router.post('/item/status', requireModerator, async (req: express.Request, res: 
     // Если отклоняем без бана, очищаем данные профиля
     if (status === 'REJECTED' && !banUser) {
       if (item.type === 'INITIAL') {
-        await prisma.profile.update({
-          where: { userId: item.userId },
-          data: {
-            initialModerationStatus: 'PENDING',
-            initialModerationNote: null
-          }
+        // Удаляем профиль и все фотографии (в БД), а файлы удаляем после транзакции
+        const photosToDelete = await prisma.$transaction(async (tx) => {
+          const photos = await tx.photo.findMany({
+            where: { userId: item.userId },
+            select: { url: true }
+          })
+          await tx.photo.deleteMany({ where: { userId: item.userId } })
+          await tx.profile.deleteMany({ where: { userId: item.userId } })
+          return photos
         })
-        
-        // Отклоняем все фотографии пользователя
-        await prisma.photo.updateMany({
-          where: { 
-            userId: item.userId,
-            status: 'PENDING'
-          },
-          data: { 
-            status: 'REJECTED',
-            note: reason || 'Отклонено'
+
+        // Пытаемся удалить файлы из CDN (вне транзакции)
+        for (const p of photosToDelete) {
+          try {
+            const url = p.url || ''
+            const filename = url.split('/').pop() || ''
+            deleteCdnFileByFilename(filename)
+          } catch (e) {
+            console.warn('Failed to delete CDN file for rejected profile:', e)
           }
-        })
-        
-        console.log(`[MODERATION] Rejected profile and all photos for user ${item.userId}`)
+        }
+
+        console.log(`[MODERATION] Rejected without ban: deleted profile and photos for user ${item.userId}`)
       }
       // Очищаем связанные данные в зависимости от типа
       if (item.type === 'PHOTOS') {
         const payload = item.payload as any
         if (payload.photoId) {
-          await prisma.photo.delete({
-            where: { id: payload.photoId }
+          // Сначала получаем URL для удаления файла, затем удаляем запись
+          const photo = await prisma.photo.findUnique({
+            where: { id: payload.photoId },
+            select: { url: true }
           })
+          await prisma.photo.delete({ where: { id: payload.photoId } })
+          // Удаляем файл из CDN (best-effort)
+          try {
+            const url = photo?.url || ''
+            const filename = url.split('/').pop() || ''
+            deleteCdnFileByFilename(filename)
+          } catch (e) {
+            console.warn('Failed to delete CDN file for rejected photo:', e)
+          }
         }
       }
     }

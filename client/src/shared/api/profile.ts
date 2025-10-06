@@ -319,4 +319,132 @@ export async function removeCustomAvatar(payload: RemoveCustomAvatarRequest): Pr
   return { ok: data.ok, message: data.message }
 }
 
+// ===== My Profile (GET/PATCH) =====
+
+export const MyProfileResponse = z.object({
+  ok: z.literal(true),
+  profile: z.object({
+    displayName: z.string().nullable(),
+    city: z.string().nullable(),
+    bio: z.string().nullable(),
+    gender: GenderEnum.nullable(),
+    heightCm: z.number().nullable(),
+    weightKg: z.number().nullable(),
+    wandSizeCm: z.number().nullable(),
+    photos: z.array(z.string().url()),
+    moderation: z.object({
+      base: z.string().nullable(),
+      description: z.string().nullable()
+    })
+  })
+}).or(z.object({ ok: z.literal(false), message: z.string().optional() }))
+export type MyProfileResponse = z.infer<typeof MyProfileResponse>
+
+export async function getMyProfile(initData: string): Promise<MyProfileResponse> {
+  const base = requireEnvUrl('API_URL')
+  const urls: string[] = []
+  if (base.includes('/api')) {
+    urls.push(joinUrl(base, 'profile/my'))
+    urls.push(joinUrl(base.replace(/\/api\/?$/i, '/'), 'profile/my'))
+    urls.push(joinUrl(base.replace(/\/api\/?$/i, '/'), 'api/profile/my'))
+  } else {
+    urls.push(joinUrl(base, 'profile/my'))
+    urls.push(joinUrl(base, 'api/profile/my'))
+  }
+  for (const url of urls) {
+    try {
+      const resp = await fetch(`${url}?initData=${encodeURIComponent(initData)}`)
+      if (!resp.ok) continue
+      const data = await resp.json().catch(() => ({}))
+      const parsed = MyProfileResponse.safeParse(data)
+      if (parsed.success) return parsed.data
+    } catch {}
+  }
+  return { ok: false, message: 'Failed to fetch /profile/my' }
+}
+
+export const PatchMyProfileRequest = z.object({
+  initData: z.string().min(1),
+  displayName: z.string().min(2).max(32).optional(),
+  city: z.string().min(1).max(128).optional(),
+  bio: z.string().min(1).max(1200).optional(),
+  gender: GenderEnum.optional(),
+  heightCm: z.number().int().min(130).max(220).nullable().optional(),
+  weightKg: z.number().int().min(30).max(150).nullable().optional(),
+  wandSizeCm: z.number().int().min(3).max(30).nullable().optional(),
+  photos: z.array(z.string().url()).min(1).optional()
+})
+export type PatchMyProfileRequest = z.infer<typeof PatchMyProfileRequest>
+
+export const PatchMyProfileResponse = z.object({ ok: z.literal(true) }).and(z.object({ editQueued: z.boolean().optional(), photosQueued: z.boolean().optional() })).or(z.object({ ok: z.literal(false), message: z.string().optional() }))
+export type PatchMyProfileResponse = z.infer<typeof PatchMyProfileResponse>
+
+export async function patchMyProfile(body: PatchMyProfileRequest): Promise<PatchMyProfileResponse> {
+  const base = requireEnvUrl('API_URL')
+  const urls: string[] = []
+  if (base.includes('/api')) {
+    urls.push(joinUrl(base, 'profile/my'))
+    urls.push(joinUrl(base.replace(/\/api\/?$/i, '/'), 'profile/my'))
+    urls.push(joinUrl(base.replace(/\/api\/?$/i, '/'), 'api/profile/my'))
+  } else {
+    urls.push(joinUrl(base, 'profile/my'))
+    urls.push(joinUrl(base, 'api/profile/my'))
+  }
+  for (const url of urls) {
+    try {
+      const resp = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      if (!resp.ok) continue
+      const data = await resp.json().catch(() => ({}))
+      const parsed = PatchMyProfileResponse.safeParse({ ok: true, ...data })
+      if (parsed.success) return parsed.data
+    } catch {}
+  }
+  return { ok: false, message: 'Failed to patch /profile/my' }
+}
+
+// ===== Report Profile =====
+
+export const ReportReasonEnum = z.enum(['SPAM', 'HARASSMENT', 'INAPPROPRIATE_CONTENT', 'FAKE_PROFILE', 'UNDERAGE', 'VIOLENCE', 'COPYRIGHT_VIOLATION', 'OTHER'])
+export type ReportReasonEnum = z.infer<typeof ReportReasonEnum>
+
+export const ReportProfileRequest = z.object({
+  initData: z.string().min(1),
+  reportedUserId: z.string().min(1),
+  reason: ReportReasonEnum,
+  description: z.string().max(500).optional(),
+})
+export type ReportProfileRequest = z.infer<typeof ReportProfileRequest>
+
+export const ReportProfileResponse = z.object({ ok: z.literal(true), message: z.string() })
+  .or(z.object({ ok: z.literal(false), message: z.string().optional() }))
+export type ReportProfileResponse = z.infer<typeof ReportProfileResponse>
+
+export async function reportProfile(body: ReportProfileRequest): Promise<ReportProfileResponse> {
+  const base = requireEnvUrl('API_URL')
+  const url = joinUrl(base, 'profile/report')
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  if (!resp.ok) {
+    let message = `HTTP ${resp.status}`
+    try {
+      const data = await resp.json()
+      if (data && typeof data.message === 'string') message = data.message
+      if (data && Array.isArray(data.issues) && data.issues.length > 0) {
+        const issueMsg = data.issues[0]?.message
+        if (typeof issueMsg === 'string' && issueMsg) message = `${message}: ${issueMsg}`
+      }
+    } catch {}
+    return { ok: false, message }
+  }
+  const data = await resp.json().catch(() => ({}))
+  return ReportProfileResponse.parse(data)
+}
+
 

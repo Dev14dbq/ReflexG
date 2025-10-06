@@ -224,12 +224,21 @@ export default function ChatListPage(): JSX.Element {
             </div>
 
             {/* Информация о чате */}
-            <div className="flex items-center justify-between w-[80%]">
+            <div className="flex items-center justify-between w-[80%]"> 
               {/* Левая часть: имя и последнее сообщение */}
               <div className="flex-1 pr-2">
                 <div className="font-medium truncate">{chat.title}</div>
                 <p className="text-sm text-muted truncate">
-                  {chat.message.last ?? 'Отправьте первое сообщение в чат'}
+                  {
+                    localStorage.getItem(`chat_${chat.id}_Draft`) ? (
+                      <>
+                        <span className="text-red-500">Черновик:</span>{' '}
+                        {localStorage.getItem(`chat_${chat.id}_Draft`)}
+                      </>
+                    ) : (
+                      chat.message.last ?? 'Отправьте первое сообщение в чат'
+                    )
+                  }
                 </p>
               </div>
               

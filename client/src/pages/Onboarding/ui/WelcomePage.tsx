@@ -8,7 +8,7 @@ export default function WelcomePage({ onStart }: Props): JSX.Element {
     <div className="min-h-screen flex flex-col bg-ripple">
       <div className="flex-1 flex items-center justify-center px-4">
         <div className="w-full max-w-md text-center">
-          <div className="text-2xl font-semibold">Reflex</div>
+          <div className="text-2xl font-semibold">Okeano</div>
           <div className="mt-2 text-muted">Добро пожаловать! Пройдите короткую регистрацию, это займёт пару минут.</div>
           <div className="mt-6">
             <button className="btn btn-primary w-full" onClick={onStart}>Начать регистрацию</button>

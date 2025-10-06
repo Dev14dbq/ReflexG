@@ -58,22 +58,24 @@ export async function fetchNextProfileForUser(userId: bigint): Promise<PublicPro
   const candidate = await prisma.user.findFirst({
     where: {
       telegramId: { not: userId },
+      isBanned: false,
       // not previously liked/disliked by me
       likesReceived: { none: { userId, } },
-      // has approved base profile
+      // has profile (любой статус)
       profile: { 
         is: { 
-          initialModerationStatus: 'APPROVED',
-          // Если есть описание, оно должно быть одобрено
-          OR: [
-            { description: null },
-            { description: '' },
-            { descriptionModerationStatus: 'APPROVED' }
-          ],
-          // Возраст должен быть не менее 14 лет
-          birthDate: {
-            lte: new Date(new Date().getFullYear() - 14, new Date().getMonth(), new Date().getDate())
-          }
+          // Убираем требование одобренного базового профиля
+          // initialModerationStatus: 'APPROVED',
+          // Убираем требование одобренного описания
+          // OR: [
+          //   { description: null },
+          //   { description: '' },
+          //   { descriptionModerationStatus: 'APPROVED' }
+          // ],
+          // Убираем возрастные ограничения
+          // birthDate: {
+          //   lte: new Date(new Date().getFullYear() - 14, new Date().getMonth(), new Date().getDate())
+          // }
         } 
       },
       // gender compatibility (if mapping exists)
@@ -91,7 +93,9 @@ export async function fetchNextProfileForUser(userId: bigint): Promise<PublicPro
           heightCm: true,
           weightKg: true,
           wandSizeCm: true,
-          gender: true
+          gender: true,
+          initialModerationStatus: true,
+          descriptionModerationStatus: true
         } 
       } 
     },
@@ -101,34 +105,32 @@ export async function fetchNextProfileForUser(userId: bigint): Promise<PublicPro
     return null
   }
 
-  // Проверяем все фотографии пользователя (не только одобренные)
+  // Проверяем все фотографии пользователя (любые)
   const allPhotos = await prisma.photo.findMany({
     where: { userId: candidate.telegramId },
     select: { id: true, url: true, status: true, position: true }
   })
   console.log(`All photos for user ${candidate.telegramId}:`, allPhotos)
   
+  // Берем любые фотографии (не только одобренные)
   const photos = await prisma.photo.findMany({
-    where: { userId: candidate.telegramId, status: 'APPROVED' },
+    where: { userId: candidate.telegramId },
     orderBy: { position: 'asc' },
     take: 3,
     select: { url: true }
   })
   
-  console.log(`Found ${photos.length} approved photos for user ${candidate.telegramId}:`, photos.map(p => p.url))
+  console.log(`Found ${photos.length} photos for user ${candidate.telegramId}:`, photos.map(p => p.url))
 
-  // Если нет одобренных фотографий, пропускаем этого пользователя
+  // Если нет фотографий вообще, пропускаем этого пользователя
   if (photos.length === 0) {
-    console.log(`Skipping user ${candidate.telegramId} - no approved photos`)
+    console.log(`Skipping user ${candidate.telegramId} - no photos at all`)
     return null
   }
 
-  // Проверяем возраст пользователя (должен быть не менее 14 лет)
+  // Убираем возрастные ограничения - показываем всех
   const age = calcAge(candidate.profile?.birthDate ?? null)
-  if (age === null || age < 14) {
-    console.log(`Skipping user ${candidate.telegramId} - age ${age} is too young (minimum 14)`)
-    return null
-  }
+  console.log(`User ${candidate.telegramId} age: ${age}`)
 
   const result = {
     userId: candidate.telegramId,

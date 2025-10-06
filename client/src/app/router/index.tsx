@@ -14,6 +14,8 @@ import WelcomePage from '@/pages/Onboarding/ui/WelcomePage'
 import PendingModerationPage from '@/pages/Onboarding/ui/PendingModerationPage'
 import DetailsPage from '@/pages/Onboarding/ui/DetailsPage'
 import ProfilePage from '@/pages/Profile/ui/ProfilePage'
+import MyProfilePage from '@/pages/MyProfile'
+import HelpPage from '@/pages/Help'
 import { AdminPage, ModerationPage, UsersPage } from '@/pages/Admin'
 import { useTelegramAuth } from '@/app/providers/TelegramAuthProvider'
 import { getProfileStatus, getUserInfo } from '@/shared/api/profile'
@@ -100,6 +102,10 @@ export function AppRouter(): JSX.Element {
           <PageTransition>
             <DetailsPage />
           </PageTransition>
+        ) : status === 'BASE_DISCREPANT' ? (
+          <PageTransition>
+            <OnboardingPage />
+          </PageTransition>
         ) : status === 'NO_PROFILE' ? (
           <PageTransition>  
             {started ? <OnboardingPage /> : <WelcomePage onStart={() => setStarted(true)} />}
@@ -114,6 +120,8 @@ export function AppRouter(): JSX.Element {
                 <Route path="/likes" element={<LikesPage />} />
                 <Route path="/explore" element={<ExplorePage />} />
                 <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/my-profile" element={<MyProfilePage />} />
+                <Route path="/help" element={<HelpPage />} />
                 
                 {/* Админские роуты - всегда доступны, но защищены внутри компонентов */}
                 <Route path="/admin" element={<AdminPage />} />

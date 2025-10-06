@@ -7,7 +7,7 @@ export const ModerationCardSchema = z.object({
   id: z.string().min(1),
   userId: z.string().min(1),
   displayName: z.string().nullable(),
-  age: z.number().int().min(14).max(120).nullable(),
+  age: z.number().int().min(1).max(120).nullable(),
   city: z.string().nullable(),
   photos: z.array(z.union([
     z.string(), // URL строка

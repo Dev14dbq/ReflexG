@@ -631,15 +631,13 @@
   }
 }
 
-.sendButton {
-  width: 44px;
-  height: 44px;
+.chatButtons {
+  height: 40px;
+  width: 40px;
   border-radius: 50%;
   border: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-
-  &:disabled { cursor: default; }
+  cursor: auto;
 }
