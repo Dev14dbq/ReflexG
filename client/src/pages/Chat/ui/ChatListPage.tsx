@@ -156,14 +156,6 @@ export default function ChatListPage(): JSX.Element {
 
   return (
     <div className="max-w-md mx-auto">
-      {/* Заголовок страницы */}
-      <div 
-        className="sticky top-0 left-0 right-0 z-10 px-4 py-3 text-center" 
-        style={{ background: 'var(--color-bg)' }}
-      >
-        <div className="text-xl font-semibold">Okeano</div>
-      </div>
-
       {/* Основной контент */}
       <div className="p-4">
         {/* Состояние пустого списка чатов */}

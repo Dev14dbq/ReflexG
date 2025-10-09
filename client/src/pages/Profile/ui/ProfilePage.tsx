@@ -188,25 +188,25 @@ export default function ProfilePage(): JSX.Element {
       id: 'privacy',
       title: 'Конфиденциальность',
       icon: <RiShieldLine size={20} />,
-      onClick: () => console.log('Конфиденциальность')
+      onClick: () => navigate('/privacy')
     },
     {
       id: 'chat-settings',
       title: 'Настройки чатов',
       icon: <RiChat3Line size={20} />,
-      onClick: () => console.log('Настройки чатов')
+      onClick: () => navigate('/chat-settings')
     },
     {
       id: 'recommendations',
       title: 'Настройки рекомендаций',
       icon: <RiSettings3Line size={20} />,
-      onClick: () => console.log('Настройки рекомендаций')
+      onClick: () => navigate('/recommendations')
     },
     {
       id: 'notifications',
       title: 'Уведомления',
       icon: <RiNotification3Line size={20} />,
-      onClick: () => console.log('Уведомления')
+      onClick: () => navigate('/notifications')
     }
   ]
 

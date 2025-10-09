@@ -141,6 +141,9 @@ model Message {
   senderId    BigInt
   text        String?
   photoUrl    String?
+  replyId     String?
+  isPinned    Boolean?            @default(false)
+  isEdit      Boolean?            @default(false)
   createdAt   DateTime            @default(now())
   deletedAt   DateTime?
   chat        Chat                @relation(fields: [chatId], references: [id], onDelete: Cascade)
@@ -188,7 +191,7 @@ model Blacklist {
 
 model UserSettings {
   userId                        BigInt              @id
-  autoDeleteMessages           AutoDeletePeriod?   @default(NEVER)
+  autoDeleteMessages           AutoDeletePeriod?   @default(MONTH)
   allowDataForTraining         Boolean             @default(true)
   createdAt                    DateTime            @default(now())
   updatedAt                    DateTime            @updatedAt
@@ -266,6 +269,7 @@ enum AutoDeletePeriod {
   DAY
   WEEK
   MONTH
+  HALF_YEAR
 }
 
 enum ReportType {

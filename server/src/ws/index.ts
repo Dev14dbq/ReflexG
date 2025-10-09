@@ -84,7 +84,17 @@ export function attachWsServer(server: import('http').Server): void {
   }
 
   const SubscribeSchema = z.object({ chatId: z.string().min(1) })
-  const SendMessageSchema = z.object({ chatId: z.string().min(1), text: z.string().min(1).max(2000) })
+  const SendMessageSchema = z.object({ 
+    chatId: z.string().min(1), 
+    text: z.string().min(1).max(2000),
+    replyId: z.string().optional()
+  })
+  const EditMessageSchema = z.object({ 
+    messageId: z.string().min(1), 
+    text: z.string().min(1).max(2000) 
+  })
+  const DeleteMessageSchema = z.object({ messageId: z.string().min(1) })
+  const PinMessageSchema = z.object({ messageId: z.string().min(1) })
   
   // Схемы для модерации
   const ModerationActionSchema = z.object({
@@ -333,29 +343,50 @@ export function attachWsServer(server: import('http').Server): void {
               const chatId = parsed.data.chatId
               chatSubscriptions.get(chatId)?.delete(ws)
             } else if (msg.t === 'send') {
+              console.log('[WS] Send message request:', msg.data)
               const validation = SendMessageSchema.safeParse({
                 chatId: String(msg.data?.chatId || ''),
                 text: String(msg.data?.text || '').trim(),
+                replyId: msg.data?.replyId ? String(msg.data.replyId) : undefined,
               })
               if (!validation.success) {
+                console.log('[WS] Send validation failed:', validation.error)
                 ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Invalid payload' } }))
                 return
               }
-              const { chatId, text } = validation.data
+              const { chatId, text, replyId } = validation.data
               // verify membership
               const member = await prisma.chatMember.findUnique({ where: { chatId_userId: { chatId, userId: client.userId } } })
               if (!member) {
                 ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Forbidden' } }))
                 return
               }
+              // verify reply message exists and is in the same chat if replyId provided
+              if (replyId) {
+                const replyMessage = await prisma.message.findFirst({
+                  where: { id: replyId, chatId, deletedAt: null }
+                })
+                if (!replyMessage) {
+                  ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Reply message not found' } }))
+                  return
+                }
+              }
               // persist
-              const message = await prisma.message.create({ data: { chatId, senderId: client.userId, text } })
+              const message = await prisma.message.create({ 
+                data: { 
+                  chatId, 
+                  senderId: client.userId, 
+                  text,
+                  replyId: replyId || null
+                } 
+              })
               await prisma.chat.update({ where: { id: chatId }, data: { lastMessageAt: new Date() } })
               const payload = {
                 id: message.id,
                 chatId,
                 senderId: String(message.senderId),
                 text: message.text,
+                replyId: message.replyId,
                 createdAt: message.createdAt.toISOString(),
               }
               // ack to sender
@@ -366,6 +397,184 @@ export function attachWsServer(server: import('http').Server): void {
               for (const c of clients.values()) {
                 if (memberIds.has(String(c.userId))) {
                   c.ws.send(JSON.stringify({ ch: 'messages', t: 'message', data: payload }))
+                }
+              }
+            } else if (msg.t === 'edit') {
+              console.log('[WS] Edit message request:', msg.data)
+              const validation = EditMessageSchema.safeParse({
+                messageId: String(msg.data?.messageId || ''),
+                text: String(msg.data?.text || '').trim(),
+              })
+              if (!validation.success) {
+                console.log('[WS] Edit validation failed:', validation.error)
+                ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Invalid payload' } }))
+                return
+              }
+              const { messageId, text } = validation.data
+              
+              // Find message and verify ownership
+              const message = await prisma.message.findFirst({
+                where: { 
+                  id: messageId, 
+                  senderId: client.userId,
+                  deletedAt: null
+                },
+                include: { chat: true }
+              })
+              if (!message) {
+                ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Message not found or access denied' } }))
+                return
+              }
+              
+              // Verify membership
+              const member = await prisma.chatMember.findUnique({ 
+                where: { chatId_userId: { chatId: message.chatId, userId: client.userId } } 
+              })
+              if (!member) {
+                ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Forbidden' } }))
+                return
+              }
+              
+              // Update message
+              const updatedMessage = await prisma.message.update({
+                where: { id: messageId },
+                data: { 
+                  text,
+                  isEdit: true
+                }
+              })
+              
+              const payload = {
+                id: updatedMessage.id,
+                chatId: updatedMessage.chatId,
+                senderId: String(updatedMessage.senderId),
+                text: updatedMessage.text,
+                replyId: updatedMessage.replyId,
+                isEdit: updatedMessage.isEdit,
+                createdAt: updatedMessage.createdAt.toISOString(),
+              }
+              
+              // ack to sender
+              ws.send(JSON.stringify({ ch: 'messages', t: 'ack', cid: msg.cid, data: { id: updatedMessage.id } }))
+              
+              // broadcast to all chat members online
+              const members = await prisma.chatMember.findMany({ where: { chatId: message.chatId }, select: { userId: true } })
+              const memberIds = new Set(members.map(m => String(m.userId)))
+              for (const c of clients.values()) {
+                if (memberIds.has(String(c.userId))) {
+                  c.ws.send(JSON.stringify({ ch: 'messages', t: 'message_edited', data: payload }))
+                }
+              }
+            } else if (msg.t === 'delete') {
+              console.log('[WS] Delete message request:', msg.data)
+              const validation = DeleteMessageSchema.safeParse({
+                messageId: String(msg.data?.messageId || ''),
+              })
+              if (!validation.success) {
+                console.log('[WS] Delete validation failed:', validation.error)
+                ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Invalid payload' } }))
+                return
+              }
+              const { messageId } = validation.data
+              
+              // Find message and verify ownership
+              const message = await prisma.message.findFirst({
+                where: { 
+                  id: messageId, 
+                  senderId: client.userId,
+                  deletedAt: null
+                },
+                include: { chat: true }
+              })
+              if (!message) {
+                ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Message not found or access denied' } }))
+                return
+              }
+              
+              // Verify membership
+              const member = await prisma.chatMember.findUnique({ 
+                where: { chatId_userId: { chatId: message.chatId, userId: client.userId } } 
+              })
+              if (!member) {
+                ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Forbidden' } }))
+                return
+              }
+              
+              // Soft delete message
+              await prisma.message.update({
+                where: { id: messageId },
+                data: { deletedAt: new Date() }
+              })
+              
+              // ack to sender
+              ws.send(JSON.stringify({ ch: 'messages', t: 'ack', cid: msg.cid, data: { id: messageId } }))
+              
+              // broadcast to all chat members online
+              const members = await prisma.chatMember.findMany({ where: { chatId: message.chatId }, select: { userId: true } })
+              const memberIds = new Set(members.map(m => String(m.userId)))
+              for (const c of clients.values()) {
+                if (memberIds.has(String(c.userId))) {
+                  c.ws.send(JSON.stringify({ ch: 'messages', t: 'message_deleted', data: { id: messageId, chatId: message.chatId } }))
+                }
+              }
+            } else if (msg.t === 'pin') {
+              const validation = PinMessageSchema.safeParse({
+                messageId: String(msg.data?.messageId || ''),
+              })
+              if (!validation.success) {
+                ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Invalid payload' } }))
+                return
+              }
+              const { messageId } = validation.data
+              
+              // Find message
+              const message = await prisma.message.findFirst({
+                where: { 
+                  id: messageId, 
+                  deletedAt: null
+                },
+                include: { chat: true }
+              })
+              if (!message) {
+                ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Message not found' } }))
+                return
+              }
+              
+              // Verify membership
+              const member = await prisma.chatMember.findUnique({ 
+                where: { chatId_userId: { chatId: message.chatId, userId: client.userId } } 
+              })
+              if (!member) {
+                ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Forbidden' } }))
+                return
+              }
+              
+              // Toggle pin status
+              const newPinStatus = !message.isPinned
+              const updatedMessage = await prisma.message.update({
+                where: { id: messageId },
+                data: { isPinned: newPinStatus }
+              })
+              
+              const payload = {
+                id: updatedMessage.id,
+                chatId: updatedMessage.chatId,
+                senderId: String(updatedMessage.senderId),
+                text: updatedMessage.text,
+                replyId: updatedMessage.replyId,
+                isPinned: updatedMessage.isPinned,
+                createdAt: updatedMessage.createdAt.toISOString(),
+              }
+              
+              // ack to sender
+              ws.send(JSON.stringify({ ch: 'messages', t: 'ack', cid: msg.cid, data: { id: updatedMessage.id } }))
+              
+              // broadcast to all chat members online
+              const members = await prisma.chatMember.findMany({ where: { chatId: message.chatId }, select: { userId: true } })
+              const memberIds = new Set(members.map(m => String(m.userId)))
+              for (const c of clients.values()) {
+                if (memberIds.has(String(c.userId))) {
+                  c.ws.send(JSON.stringify({ ch: 'messages', t: 'message_pinned', data: payload }))
                 }
               }
             }

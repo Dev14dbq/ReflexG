@@ -1,7 +1,5 @@
 import { type JSX } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { 
-  RiArrowLeftSLine, 
   RiUser3Line, 
   RiHeartLine, 
   RiCloseLine, 
@@ -12,7 +10,6 @@ import {
 } from 'react-icons/ri'
 
 export default function HelpPage(): JSX.Element {
-  const navigate = useNavigate()
 
   const helpSections = [
     {
@@ -55,19 +52,6 @@ export default function HelpPage(): JSX.Element {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-[var(--color-bg)]">
-      {/* Верхний бар */}
-      <div className="sticky top-0 left-0 right-0 bg-[var(--color-bg)] z-20 border-b border-[color-mix(in_oklab,var(--color-accent)10%,transparent)]">
-        <div className="flex items-center justify-center h-14 px-4 relative">
-          <button
-            onClick={() => navigate(-1)}
-            className="absolute left-4 text-[var(--color-fg)] hover:opacity-70 transition-opacity"
-          >
-            <RiArrowLeftSLine size={24} />
-          </button>
-          <h1 className="text-lg font-semibold text-[var(--color-fg)]">Справка</h1>
-        </div>
-      </div>
-
       {/* Контент */}
       <div className="px-4 py-6 space-y-6">
         {/* Приветствие */}

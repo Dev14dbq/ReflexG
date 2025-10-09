@@ -106,7 +106,7 @@ router.get('/messages/history', async (req: express.Request, res: express.Respon
     where: { chatId, deletedAt: null },
     orderBy: { createdAt: 'desc' },
     take: limit,
-    select: { id: true, senderId: true, text: true, photoUrl: true, createdAt: true },
+    select: { id: true, senderId: true, text: true, photoUrl: true, createdAt: true, replyId: true, isPinned: true, isEdit: true },
   })
 
   const items = rows.reverse().map(r => ({
@@ -115,9 +115,57 @@ router.get('/messages/history', async (req: express.Request, res: express.Respon
     text: r.text ?? '',
     photoUrl: r.photoUrl ?? null,
     createdAt: r.createdAt.toISOString(),
+    replyId: r.replyId ?? null,
+    isPinned: r.isPinned ?? false,
+    isEdit: r.isEdit ?? false,
   }))
 
   return res.json({ ok: true, items })
+})
+
+const ChatInfoQuery = z.object({
+  initData: z.string().min(1),
+  chatId: z.string().min(1),
+})
+
+router.get('/messages/chat-info', async (req: express.Request, res: express.Response) => {
+  const parsed = ChatInfoQuery.safeParse(req.query)
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid query' })
+  const token = ENV.TELEGRAM_BOT_TOKEN
+  if (!token) return res.status(500).json({ message: 'Server misconfigured' })
+  const v = verifyTelegramInitData(parsed.data.initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
+  if (!v.ok || !v.user) return res.status(401).json({ message: 'Unauthorized' })
+
+  const userId = BigInt(v.user.id)
+  const chatId = parsed.data.chatId
+  // verify membership
+  const member = await prisma.chatMember.findUnique({ where: { chatId_userId: { chatId, userId } } })
+  if (!member) return res.status(403).json({ message: 'Forbidden' })
+
+  // Get chat info and other member info
+  const chatInfo = await prisma.chat.findUnique({
+    where: { id: chatId },
+    include: {
+      members: {
+        where: { userId: { not: userId } },
+        include: { user: true }
+      }
+    }
+  })
+
+  if (!chatInfo) return res.status(404).json({ message: 'Chat not found' })
+
+  const otherMember = chatInfo.members[0]?.user
+  if (!otherMember) return res.status(404).json({ message: 'Other member not found' })
+
+  const chat = {
+    id: chatInfo.id,
+    title: otherMember.username || otherMember.firstName || `ID ${otherMember.telegramId}`,
+    avatarUrl: otherMember.photoUrl,
+    isOnline: false, // This would need to be tracked separately
+  }
+
+  return res.json({ ok: true, chat })
 })
 
 export const messagesRouter = router

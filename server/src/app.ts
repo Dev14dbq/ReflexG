@@ -13,6 +13,7 @@ import { moderationRouter } from '@/routes/moderation'
 import { likesRouter } from '@/routes/likes'
 import { checkUserBan } from '@/lib/middleware/banCheck'
 import { settingsChatRouter } from '@/routes/settings'
+import { privacyRouter } from '@/routes/privacy'
 
 export function createApp(): express.Express {
   const app = express()
@@ -55,6 +56,7 @@ export function createApp(): express.Express {
   app.use('/', messagesRouter)
   app.use('/', adminRouter)
   app.use('/', settingsChatRouter)
+  app.use('/', privacyRouter)
   app.use('/', likesRouter)
   app.use('/moderation', moderationRouter)
   
@@ -68,6 +70,7 @@ export function createApp(): express.Express {
   app.use('/api', messagesRouter)
   app.use('/api', adminRouter)
   app.use('/api', settingsChatRouter)
+  app.use('/api', privacyRouter)
   app.use('/api', likesRouter)
   app.use('/api/moderation', moderationRouter)
 

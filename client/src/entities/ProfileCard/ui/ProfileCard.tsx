@@ -852,9 +852,9 @@ export default function ProfileCard({ data, onLike, onDislike, isEditable = fals
         editingField ? 'pointer-events-none' : 'cursor-pointer'
       }`}
       style={{ 
-        height: isEditable ? 'calc(100vh - 120px)' : 'calc(100vh - var(--bottom-nav-height, 80px))', 
-        minHeight: '500px',
-        maxHeight: isEditable ? 'calc(100vh - 120px)' : 'calc(100vh - 60px)',
+        height: '100%',
+        minHeight: 'auto',
+        maxHeight: '100%',
         '--bottom-nav-height': '80px'
       } as React.CSSProperties}
       onClick={editingField ? undefined : handlePhotoClick}

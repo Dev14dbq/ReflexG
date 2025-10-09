@@ -1,10 +1,11 @@
 import { Suspense, useEffect, useState } from 'react'
 import type { JSX } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { wsClient } from '@/shared/lib/ws'
 
 import BottomNav from '@/app/layout/BottomNav'
 import AdminBottomNav from '@/app/layout/AdminBottomNav'
+import Header from '@/app/layout/Header'
 import ChatListPage from '@/pages/Chat/ui/ChatListPage'
 import ChatPage from '@/pages/Chat/ui/ChatPage'
 import ExplorePage from '@/pages/Explore/ui/ExplorePage'
@@ -16,6 +17,10 @@ import DetailsPage from '@/pages/Onboarding/ui/DetailsPage'
 import ProfilePage from '@/pages/Profile/ui/ProfilePage'
 import MyProfilePage from '@/pages/MyProfile'
 import HelpPage from '@/pages/Help'
+import PrivacyPage from '@/pages/Privacy'
+import ChatSettingsPage from '@/pages/ChatSettings'
+import RecommendationsPage from '@/pages/Recommendations'
+import NotificationsPage from '@/pages/Notifications'
 import { AdminPage, ModerationPage, UsersPage } from '@/pages/Admin'
 import { useTelegramAuth } from '@/app/providers/TelegramAuthProvider'
 import { getProfileStatus, getUserInfo } from '@/shared/api/profile'
@@ -91,6 +96,39 @@ export function AppRouter(): JSX.Element {
     return !shouldHideBottomNav(pathname) ? <BottomNav /> : null
   }
 
+  function HeaderSwitcher(): JSX.Element {
+    const location = useLocation()
+    const navigate = useNavigate()
+    const p = location.pathname
+    const title = p === '/my-profile' ? 'Моя анкета' 
+      : p === '/help' ? 'Справка' 
+      : p === '/privacy' ? 'Конфиденциальность' 
+      : p === '/chat-settings' ? 'Чаты'
+      : p === '/recommendations' ? 'Рекомендации'
+      : p === '/notifications' ? 'Уведомления'
+      : 'Okeano'
+
+    // Telegram BackButton integration
+    useEffect(() => {
+      const webApp = window?.Telegram?.WebApp
+      const showBack = p === '/my-profile' || p === '/help' || p === '/privacy' || p === '/chat-settings' || p === '/recommendations' || p === '/notifications'
+      if (!webApp?.BackButton) return
+      const onBack = () => navigate(-1)
+      try {
+        if (showBack) {
+          webApp.BackButton.show?.()
+          webApp.BackButton.onClick?.(onBack)
+        } else {
+          webApp.BackButton.hide?.()
+        }
+      } catch {}
+      return () => {
+        try { webApp?.BackButton?.offClick?.(onBack) } catch {}
+      }
+    }, [p, navigate])
+    return <Header title={title} />
+  }
+
   return (
     <Suspense fallback={null}>
       <BrowserRouter>
@@ -112,8 +150,11 @@ export function AppRouter(): JSX.Element {
           </PageTransition>
         ) : (
           <div className="">{/* reserve space for bottom nav */}
+            <HeaderSwitcher />
+            <main className="fixed left-0 right-0" style={{ top: '100px', bottom: '80px', overflow: 'auto' }}>
             <PageTransition>
-              <Routes>
+              <div className="h-full">
+                <Routes>
                 <Route path="/" element={<Navigate to="/chat" replace />} />
                 <Route path="/chat" element={<ChatListPage />} />
                 <Route path="/chat/:chatId" element={<ChatPage />} />
@@ -122,6 +163,10 @@ export function AppRouter(): JSX.Element {
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/my-profile" element={<MyProfilePage />} />
                 <Route path="/help" element={<HelpPage />} />
+                <Route path="/privacy" element={<PrivacyPage />} />
+                <Route path="/chat-settings" element={<ChatSettingsPage />} />
+                <Route path="/recommendations" element={<RecommendationsPage />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
                 
                 {/* Админские роуты - всегда доступны, но защищены внутри компонентов */}
                 <Route path="/admin" element={<AdminPage />} />
@@ -130,7 +175,9 @@ export function AppRouter(): JSX.Element {
                 
                 <Route path="*" element={<Navigate to="/chat" replace />} />
               </Routes>
+              </div>
             </PageTransition>
+            </main>
             
             {/* Показываем соответствующее нижнее меню */}
             <BottomNavSwitcher />
