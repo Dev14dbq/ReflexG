@@ -18,6 +18,7 @@ import ProfilePage from '@/pages/Profile/ui/ProfilePage'
 import MyProfilePage from '@/pages/MyProfile'
 import HelpPage from '@/pages/Help'
 import PrivacyPage from '@/pages/Privacy'
+import BlacklistPage from '@/pages/Blacklist'
 import ChatSettingsPage from '@/pages/ChatSettings'
 import RecommendationsPage from '@/pages/Recommendations'
 import NotificationsPage from '@/pages/Notifications'
@@ -103,6 +104,7 @@ export function AppRouter(): JSX.Element {
     const title = p === '/my-profile' ? 'Моя анкета' 
       : p === '/help' ? 'Справка' 
       : p === '/privacy' ? 'Конфиденциальность' 
+      : p === '/blacklist' ? 'Черный список'
       : p === '/chat-settings' ? 'Чаты'
       : p === '/recommendations' ? 'Рекомендации'
       : p === '/notifications' ? 'Уведомления'
@@ -111,7 +113,7 @@ export function AppRouter(): JSX.Element {
     // Telegram BackButton integration
     useEffect(() => {
       const webApp = window?.Telegram?.WebApp
-      const showBack = p === '/my-profile' || p === '/help' || p === '/privacy' || p === '/chat-settings' || p === '/recommendations' || p === '/notifications'
+      const showBack = p === '/my-profile' || p === '/help' || p === '/privacy' || p === '/blacklist' || p === '/chat-settings' || p === '/recommendations' || p === '/notifications'
       if (!webApp?.BackButton) return
       const onBack = () => navigate(-1)
       try {
@@ -164,6 +166,7 @@ export function AppRouter(): JSX.Element {
                 <Route path="/my-profile" element={<MyProfilePage />} />
                 <Route path="/help" element={<HelpPage />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
+                <Route path="/blacklist" element={<BlacklistPage />} />
                 <Route path="/chat-settings" element={<ChatSettingsPage />} />
                 <Route path="/recommendations" element={<RecommendationsPage />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
