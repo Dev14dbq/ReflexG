@@ -12,11 +12,13 @@ const ChatsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 })
 
-router.get('/messages/chats', async (req: express.Request, res: express.Response) => {
+router.get('/chat/me', async (req: express.Request, res: express.Response) => {
   const parsed = ChatsQuery.safeParse(req.query)
   if (!parsed.success) return res.status(400).json({ message: 'Invalid query' })
+
   const token = ENV.TELEGRAM_BOT_TOKEN
   if (!token) return res.status(500).json({ message: 'Server misconfigured' })
+    
   const v = verifyTelegramInitData(parsed.data.initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
   if (!v.ok || !v.user) return res.status(401).json({ message: 'Unauthorized' })
 

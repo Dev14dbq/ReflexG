@@ -18,7 +18,7 @@ export interface ChatListResponse {
 
 export async function fetchChats(initData: string, cursor?: string, limit = 20): Promise<ChatListResponse> {
   const base = requireEnvUrl('API_URL')
-  const url = new URL('messages/chats', base)
+  const url = new URL('chat/me', base)
   url.searchParams.set('initData', initData)
   if (cursor) url.searchParams.set('cursor', cursor)
   url.searchParams.set('limit', String(limit))

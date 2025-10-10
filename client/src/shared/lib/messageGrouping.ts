@@ -1,14 +1,18 @@
 import { type ChatMessageItem } from '@/shared/api/chat'
 
-export type DateTimeGroup = { dateKey: string, label: string, groups: ChatMessageItem[][] }
+type DateTimeGroup = {
+  dateKey: string
+  label: string
+  groups: ChatMessageItem[][]
+}
 
-// Вынесенная сортировка по времени (возрастание)
-export const sortMessagesByCreatedAtAsc = (messages: ChatMessageItem[]): ChatMessageItem[] => {
+// Сортировка сообщений по времени (Возрастание)
+const sortMessagesByCreatedAtAsc = (messages: ChatMessageItem[]): ChatMessageItem[] => {
   return [...messages].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 }
 
-// Группировка в пределах одной даты по временным блокам (один отправитель, < 2 минут)
-export const buildTimeGroups = (items: ChatMessageItem[]): ChatMessageItem[][] => {
+// Группировка сообщений в 1 блок (От 1 отправителя)
+const buildTimeGroups = (items: ChatMessageItem[]): ChatMessageItem[][] => {
   const timeGroups: ChatMessageItem[][] = []
   let currentGroup: ChatMessageItem[] = []
 
@@ -48,7 +52,7 @@ export const getDateKey = (dateString: string): string => {
   return `${year}-${month}-${day}`
 }
 
-export const formatDateLabel = (dateInput: string | Date): string => {
+const formatDateLabel = (dateInput: string | Date): string => {
   const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
   const now = new Date()
 

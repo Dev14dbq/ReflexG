@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
-import { useParams, NavLink } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
@@ -203,7 +203,7 @@ export default function ChatPage(): JSX.Element {
   const handleDeleteMessages = (messageIds: object) => {
     if (!messageIds) return
     
-    wsClient.delete({
+    wsClient.send({
       ch: 'messages',
       t: 'delete',
       data: { messageIds }
@@ -214,7 +214,7 @@ export default function ChatPage(): JSX.Element {
   const handleEditMessage = (messageId: string, newText: string) => {
     if (!messageId || !newText) return
       
-    wsClient.delete({
+    wsClient.send({
       ch: 'messages',
       t: 'edit',
       data: {
@@ -266,8 +266,6 @@ export default function ChatPage(): JSX.Element {
     handleDeleteMessages({ [messageId]: true })
   }
 
-  // Группировка по датам вынесена в утилиту groupMessagesByDateAndTime
-
   /* Обработка ошибок */
   if (errorState && errorState !== 'Показано') {
     console.error('[ChatPage]:', errorState)
@@ -275,11 +273,17 @@ export default function ChatPage(): JSX.Element {
     setErrorState('Показано') // Предотвращаем повторное показывание ошибки
   }
 
+  const navigate = useNavigate();
+
+  const goBack = () => {
+    navigate(-1); // идёт назад на одну страницу
+  };
+
   return (
     <div className={styles.container}>
       {/* Заголовок чата */}
       <div className={styles.header}>
-        <NavLink to='/messages' className={styles.backButton || ''}>
+        <button onClick={goBack} className={styles.backButton}>
           <svg
             width="20"
             height="20"
@@ -289,7 +293,7 @@ export default function ChatPage(): JSX.Element {
           >
             <path d="M19 12H5M12 19L5 12L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-        </NavLink>
+        </button >
 
         {/* Информация о собеседнике */}
         <div className={styles.userInfo}>
@@ -298,7 +302,7 @@ export default function ChatPage(): JSX.Element {
               <img src={chatInfo.avatarUrl} alt={chatInfo.title} />
             ) : (
               <div className={styles.avatarPlaceholder}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg width="25" height="25" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
@@ -327,8 +331,8 @@ export default function ChatPage(): JSX.Element {
         <button className={styles.moreButton} onClick={handleMoreActions}>
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="25px"
-            height="25px"
+            width="24px"
+            height="24px"
             viewBox="0 0 24 24"
             style={{ stroke: "var(--color-fg)" }}
             strokeWidth="2"
@@ -353,7 +357,7 @@ export default function ChatPage(): JSX.Element {
               </svg>
             </div>
             <h1 className={styles.emptyTitle}>Начните разговор</h1>
-            <p className={styles.emptySubtitle}>Отправьте первое сообщение, чтобы начать общение</p>
+            <p className={styles.emptySubtitle}>Отправьте сообщение или нажмите на приветствие ниже.</p>
           </div>
         )}
         
@@ -436,21 +440,11 @@ export default function ChatPage(): JSX.Element {
                             )}
                             
                             {/* Текстовое сообщение с временем */}
-                            {message.text ? (
+                            {message.text && (
                               <div className={styles.messageTextContainer}>
                                 <span className={styles.messageText}>
                                   {message.text}
                                 </span>
-                                <span className={styles.messageTime}>
-                                  {new Date(message.createdAt).toLocaleTimeString('ru-RU', { 
-                                    hour: '2-digit', 
-                                    minute: '2-digit' 
-                                  })}
-                                </span>
-                              </div>
-                            ) : (
-                              /* Только время для сообщений без текста */
-                              <div className={styles.messageTimeOnly}>
                                 <span className={styles.messageTime}>
                                   {new Date(message.createdAt).toLocaleTimeString('ru-RU', { 
                                     hour: '2-digit', 

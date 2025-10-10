@@ -41,7 +41,7 @@ export default function ChatListPage(): JSX.Element {
       
       setPaginationCursor(response.nextCursor)
     } catch (error) {
-      setErrorState(error instanceof Error ? error.message : 'Ошибка загрузки')
+      setErrorState(error instanceof Error ? error.message : 'Возникла ошибка при загрузки чатов!')
     } finally {
       setIsLoading(false)
     }
@@ -68,7 +68,7 @@ export default function ChatListPage(): JSX.Element {
     // Загружаем данные только если кэш пуст или устарел
     const cachedState = chatStore.getState()
     if (cachedState.items.length === 0 || chatStore.isStale()) {
-      ;(async () => {
+      (async () => {
         setIsInitialLoading(true)
         try {
           await loadMoreChats()
@@ -116,8 +116,27 @@ export default function ChatListPage(): JSX.Element {
     return () => intersectionObserver.disconnect()
   }, [paginationCursor, isLoading])
 
+  function truncateStringBasedOnScreenSize(str:string) {
+    const width = window.innerWidth;
+  
+    let maxLength;
+    if (width >= 1200) {
+      maxLength = 60;
+    } else if (width >= 768) {
+      maxLength = 40;
+    } else {
+      maxLength = 23;
+    }
+  
+    if (str.length > maxLength) {
+      return str.substring(0, maxLength) + '...';
+    }
+    return str;
+  }
+
   /* Форматирование даты или времени для отображения */
-  function formatChatTimestamp(timestamp: string): string {
+  function formatChatTimestamp(timestamp:string): string {    
+    timestamp = timestamp + 'Z'
     const messageDate = new Date(timestamp)
     const currentDate = new Date()
   
@@ -139,7 +158,7 @@ export default function ChatListPage(): JSX.Element {
       currentDateComponents.day === messageDay
   
     if (isToday) {
-      return messageDate.toLocaleTimeString('ru-RU', { 
+      return new Date(timestamp).toLocaleTimeString('ru-RU', { 
         hour: '2-digit', 
         minute: '2-digit' 
       })
@@ -203,7 +222,7 @@ export default function ChatListPage(): JSX.Element {
             className="flex items-center gap-3 py-2"
           >
             {/* Аватар пользователя */}
-            <div className="w-12 h-12 rounded-full border border-accent overflow-hidden flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
               {chat.avatarUrl ? (
                 <img 
                   src={chat.avatarUrl} 
@@ -217,9 +236,17 @@ export default function ChatListPage(): JSX.Element {
 
             {/* Информация о чате */}
             <div className="flex items-center justify-between w-[80%]"> 
-              {/* Левая часть: имя и последнее сообщение */}
               <div className="flex-1 pr-2">
-                <div className="font-medium truncate">{chat.title}</div>
+                <div className="font-medium flex justify-between items-center">
+                  <div>{chat.title}</div>
+                  
+                  {chat.message.time && (
+                    <p className="text-sm text-muted ml-1" style={{ marginLeft: '5px' }}>
+                      {formatChatTimestamp(chat.message.time)}
+                    </p>
+                  )}
+                </div>
+
                 <p className="text-sm text-muted truncate">
                   {
                     localStorage.getItem(`chat_${chat.id}_Draft`) ? (
@@ -228,20 +255,13 @@ export default function ChatListPage(): JSX.Element {
                         {localStorage.getItem(`chat_${chat.id}_Draft`)}
                       </>
                     ) : (
-                      chat.message.last ?? 'Отправьте первое сообщение в чат'
+                      chat.message.last ?
+                        truncateStringBasedOnScreenSize(chat.message.last)
+                        : 'Отправьте первое сообщение в чат'
                     )
                   }
                 </p>
               </div>
-              
-              {/* Правая часть: время последнего сообщения */}
-              {chat.message.time && (
-                <div className="flex-shrink-0 ml-2">
-                  <p className="text-sm text-muted">
-                    {formatChatTimestamp(chat.message.time)}
-                  </p>
-                </div>
-              )}
             </div>
           </NavLink>
         ))}
