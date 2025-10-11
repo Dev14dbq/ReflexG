@@ -6,8 +6,8 @@ import { wsClient } from '@/shared/lib/ws'
 import BottomNav from '@/app/layout/BottomNav'
 import AdminBottomNav from '@/app/layout/AdminBottomNav'
 import Header from '@/app/layout/Header'
-import ChatListPage from '@/pages/Chat/ui/ChatListPage'
-import ChatPage from '@/pages/Chat/ui/ChatPage'
+import ThemeListPage from '@/pages/Theme/ui/ThemeListPage'
+import ThemePage from '@/pages/Theme/ui/ThemePage'
 import ExplorePage from '@/pages/Explore/ui/ExplorePage'
 import LikesPage from '@/pages/Likes/ui/LikesPage'
 import OnboardingPage from '@/pages/Onboarding/ui/OnboardingPage'
@@ -19,14 +19,16 @@ import MyProfilePage from '@/pages/MyProfile'
 import HelpPage from '@/pages/Help'
 import PrivacyPage from '@/pages/Privacy'
 import BlacklistPage from '@/pages/Blacklist'
-import ChatSettingsPage from '@/pages/ChatSettings'
+import ThemeSettingsPage from '@/pages/ThemeSettings'
 import RecommendationsPage from '@/pages/Recommendations'
 import NotificationsPage from '@/pages/Notifications'
+import AboutPositionPage from '@/pages/AboutPosition'
 import { AdminPage, ModerationPage, UsersPage } from '@/pages/Admin'
 import { useTelegramAuth } from '@/app/providers/TelegramAuthProvider'
 import { getProfileStatus, getUserInfo } from '@/shared/api/profile'
 import type { UserInfoResponse } from '@/shared/api/profile'
 import PageTransition from '@/shared/ui/PageTransition'
+import LikesNotification from '@/shared/components/LikesNotification'
 
 export function AppRouter(): JSX.Element {
   const {ready, isWebApp} = useTelegramAuth()
@@ -35,7 +37,7 @@ export function AppRouter(): JSX.Element {
   const [userInfo, setUserInfo] = useState<UserInfoResponse | null>(null)
 
   /* Массив со страницами где не требуется отображение нижней панели */
-  const BottomNavIgnore = ['/chat/*']
+  const BottomNavIgnore = ['/theme/*']
 
     /* Подключение к WebSocket серверу */
     useEffect(() => {
@@ -55,7 +57,7 @@ export function AppRouter(): JSX.Element {
       if (prefix === '/') return true
 
       if (hasWildcard) {
-        // Скрывать только если есть непустой хвост после префикса: '/chat/*' → '/chat/...' (но не '/chat' или '/chat/')
+        // Скрывать только если есть непустой хвост после префикса: '/theme/*' → '/theme/...' (но не '/theme' или '/theme/')
         if (!normalizedPath.startsWith(`${prefix}/`)) return false
         const rest = normalizedPath.slice(prefix.length + 1) // часть после `${prefix}/`
         return rest.length > 0
@@ -105,15 +107,16 @@ export function AppRouter(): JSX.Element {
       : p === '/help' ? 'Справка' 
       : p === '/privacy' ? 'Конфиденциальность' 
       : p === '/blacklist' ? 'Черный список'
-      : p === '/chat-settings' ? 'Чаты'
+      : p === '/chat-settings' ? 'Тема'
       : p === '/recommendations' ? 'Рекомендации'
       : p === '/notifications' ? 'Уведомления'
+      : p === '/about-position' ? 'Наша позиция'
       : 'Okeano'
 
     // Telegram BackButton integration
     useEffect(() => {
       const webApp = window?.Telegram?.WebApp
-      const showBack = p === '/my-profile' || p === '/help' || p === '/privacy' || p === '/blacklist' || p === '/chat-settings' || p === '/recommendations' || p === '/notifications'
+      const showBack = p === '/my-profile' || p === '/help' || p === '/privacy' || p === '/blacklist' || p === '/chat-settings' || p === '/recommendations' || p === '/notifications' || p === '/about-position'
       if (!webApp?.BackButton) return
       const onBack = () => navigate(-1)
       try {
@@ -157,9 +160,9 @@ export function AppRouter(): JSX.Element {
             <PageTransition>
               <div className="h-full">
                 <Routes>
-                <Route path="/" element={<Navigate to="/chat" replace />} />
-                <Route path="/chat" element={<ChatListPage />} />
-                <Route path="/chat/:chatId" element={<ChatPage />} />
+                <Route path="/" element={<Navigate to="/theme" replace />} />
+                <Route path="/theme" element={<ThemeListPage />} />
+                <Route path="/theme/:chatId" element={<ThemePage />} />
                 <Route path="/likes" element={<LikesPage />} />
                 <Route path="/explore" element={<ExplorePage />} />
                 <Route path="/profile" element={<ProfilePage />} />
@@ -167,16 +170,17 @@ export function AppRouter(): JSX.Element {
                 <Route path="/help" element={<HelpPage />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
                 <Route path="/blacklist" element={<BlacklistPage />} />
-                <Route path="/chat-settings" element={<ChatSettingsPage />} />
+                <Route path="/chat-settings" element={<ThemeSettingsPage />} />
                 <Route path="/recommendations" element={<RecommendationsPage />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/about-position" element={<AboutPositionPage />} />
                 
                 {/* Админские роуты - всегда доступны, но защищены внутри компонентов */}
                 <Route path="/admin" element={<AdminPage />} />
                 <Route path="/admin/moderation" element={<ModerationPage />} />
                 <Route path="/admin/users" element={<UsersPage />} />
                 
-                <Route path="*" element={<Navigate to="/chat" replace />} />
+                <Route path="*" element={<Navigate to="/theme" replace />} />
               </Routes>
               </div>
             </PageTransition>
@@ -184,6 +188,9 @@ export function AppRouter(): JSX.Element {
             
             {/* Показываем соответствующее нижнее меню */}
             <BottomNavSwitcher />
+            
+            {/* Глобальные уведомления */}
+            <LikesNotification />
           </div>
         )}
       </BrowserRouter>

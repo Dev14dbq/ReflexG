@@ -95,6 +95,10 @@ export function attachWsServer(server: import('http').Server): void {
   })
   const DeleteMessageSchema = z.object({ messageId: z.string().min(1) })
   const PinMessageSchema = z.object({ messageId: z.string().min(1) })
+  const ReplyMessageSchema = z.object({ 
+    messageId: z.string().min(1), 
+    text: z.string().min(1).max(2000) 
+  })
   
   // Схемы для модерации
   const ModerationActionSchema = z.object({
@@ -575,6 +579,74 @@ export function attachWsServer(server: import('http').Server): void {
               for (const c of clients.values()) {
                 if (memberIds.has(String(c.userId))) {
                   c.ws.send(JSON.stringify({ ch: 'messages', t: 'message_pinned', data: payload }))
+                }
+              }
+            } else if (msg.t === 'reply') {
+              console.log('[WS] Reply message request:', msg.data)
+              const validation = ReplyMessageSchema.safeParse({
+                messageId: String(msg.data?.messageId || ''),
+                text: String(msg.data?.text || '').trim(),
+              })
+              if (!validation.success) {
+                console.log('[WS] Reply validation failed:', validation.error)
+                ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Invalid payload' } }))
+                return
+              }
+              const { messageId, text } = validation.data
+              
+              // Find the message being replied to
+              const originalMessage = await prisma.message.findFirst({
+                where: { 
+                  id: messageId, 
+                  deletedAt: null
+                },
+                include: { chat: true }
+              })
+              if (!originalMessage) {
+                ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Original message not found' } }))
+                return
+              }
+              
+              // Verify membership
+              const member = await prisma.chatMember.findUnique({ 
+                where: { chatId_userId: { chatId: originalMessage.chatId, userId: client.userId } } 
+              })
+              if (!member) {
+                ws.send(JSON.stringify({ ch: 'messages', t: 'error', cid: msg.cid, data: { message: 'Forbidden' } }))
+                return
+              }
+              
+              // Create reply message
+              const replyMessage = await prisma.message.create({ 
+                data: { 
+                  chatId: originalMessage.chatId, 
+                  senderId: client.userId, 
+                  text,
+                  replyId: messageId
+                }
+              })
+              
+              // Update chat last message time
+              await prisma.chat.update({ where: { id: originalMessage.chatId }, data: { lastMessageAt: new Date() } })
+              
+              const payload = {
+                id: replyMessage.id,
+                chatId: replyMessage.chatId,
+                senderId: String(replyMessage.senderId),
+                text: replyMessage.text,
+                replyId: replyMessage.replyId,
+                createdAt: replyMessage.createdAt.toISOString(),
+              }
+              
+              // ack to sender
+              ws.send(JSON.stringify({ ch: 'messages', t: 'ack', cid: msg.cid, data: { id: replyMessage.id } }))
+              
+              // broadcast to all chat members online
+              const members = await prisma.chatMember.findMany({ where: { chatId: originalMessage.chatId }, select: { userId: true } })
+              const memberIds = new Set(members.map(m => String(m.userId)))
+              for (const c of clients.values()) {
+                if (memberIds.has(String(c.userId))) {
+                  c.ws.send(JSON.stringify({ ch: 'messages', t: 'message', data: payload }))
                 }
               }
             }

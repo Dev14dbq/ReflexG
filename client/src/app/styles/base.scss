@@ -87,6 +87,7 @@ body { background: var(--color-bg); color: var(--color-fg); }
   border: 1px solid color-mix(in oklab, var(--color-accent) 25%, transparent) !important;
   background: color-mix(in oklab, var(--color-bg) 96%, transparent 4%) !important;
   color: var(--color-fg) !important;
+  margin-top: 60px !important; /* Отступ под хедер */
   padding: 12px 14px !important;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
 }

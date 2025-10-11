@@ -34,6 +34,8 @@ router.get('/chat/me', async (req: express.Request, res: express.Response) => {
       last: string | null
       time: string | null
     }
+    unreadCount: number
+    isRead: boolean
   }
   const rows = await prisma.$queryRaw<Row[]>`
     SELECT 
@@ -43,20 +45,38 @@ router.get('/chat/me', async (req: express.Request, res: express.Response) => {
       json_build_object(
         'last', lm."text",
         'time', lm."createdAt"
-      ) as "message"
+      ) as "message",
+      COALESCE(unread_count.count, 0) as "unreadCount",
+      CASE 
+        WHEN cm."lastReadMessageId" IS NOT NULL AND lm."id" IS NOT NULL AND cm."lastReadMessageId" = lm."id" THEN true
+        WHEN cm."lastReadMessageId" IS NULL AND lm."id" IS NULL THEN true
+        ELSE false
+      END as "isRead"
     
     FROM "ChatMember" cm
     JOIN "Chat" c ON c."id" = cm."chatId"
     JOIN "ChatMember" cm2 ON cm2."chatId" = cm."chatId" AND cm2."userId" <> ${userId}
     JOIN "User" u ON u."telegramId" = cm2."userId"
     LEFT JOIN LATERAL (
-      SELECT m."text", m."createdAt"
+      SELECT m."id", m."text", m."createdAt"
       FROM "Message" m
       WHERE m."chatId" = c."id" AND m."deletedAt" IS NULL
       ORDER BY m."createdAt" DESC
       LIMIT 1
     ) lm ON TRUE
-    WHERE cm."userId" = ${userId}
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int as count
+      FROM "Message" m
+      WHERE m."chatId" = c."id" 
+        AND m."deletedAt" IS NULL
+        AND m."senderId" <> ${userId}
+        AND (cm."lastReadMessageId" IS NULL OR m."createdAt" > (
+          SELECT m2."createdAt" 
+          FROM "Message" m2 
+          WHERE m2."id" = cm."lastReadMessageId"
+        ))
+    ) unread_count ON TRUE
+    WHERE cm."userId" = ${userId} AND c."isArchived" = false
     ORDER BY c."lastMessageAt" DESC NULLS LAST, c."updatedAt" DESC
     OFFSET ${page * limit}
     LIMIT ${limit}
@@ -69,7 +89,9 @@ router.get('/chat/me', async (req: express.Request, res: express.Response) => {
     message: {
       last: r.message?.last ? String(r.message?.last).slice(0, 30) : null,
       time: r.message?.time
-    }
+    },
+    unreadCount: r.unreadCount,
+    isRead: r.isRead
   }));
 
   const totalRows = await prisma.$queryRaw<{ count: bigint }[]>`
@@ -168,6 +190,91 @@ router.get('/messages/chat-info', async (req: express.Request, res: express.Resp
   }
 
   return res.json({ ok: true, chat })
+})
+
+const ArchiveQuery = z.object({
+  initData: z.string().min(1),
+})
+
+router.get('/chat/archive', async (req: express.Request, res: express.Response) => {
+  const parsed = ArchiveQuery.safeParse(req.query)
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid query' })
+
+  const token = ENV.TELEGRAM_BOT_TOKEN
+  if (!token) return res.status(500).json({ message: 'Server misconfigured' })
+    
+  const v = verifyTelegramInitData(parsed.data.initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
+  if (!v.ok || !v.user) return res.status(401).json({ message: 'Unauthorized' })
+
+  const userId = BigInt(v.user.id)
+
+  // Получаем данные архива
+  const archiveData = await prisma.$queryRaw<{
+    messageCount: number
+    chatTitles: string[]
+  }[]>`
+    SELECT 
+      COUNT(m."id")::int as "messageCount",
+      array_agg(DISTINCT COALESCE(u."username", u."firstName", 'ID ' || u."telegramId")) as "chatTitles"
+    FROM "ChatMember" cm
+    JOIN "Chat" c ON c."id" = cm."chatId"
+    JOIN "ChatMember" cm2 ON cm2."chatId" = cm."chatId" AND cm2."userId" <> ${userId}
+    JOIN "User" u ON u."telegramId" = cm2."userId"
+    LEFT JOIN "Message" m ON m."chatId" = c."id" AND m."deletedAt" IS NULL
+    WHERE cm."userId" = ${userId} AND c."isArchived" = true
+  `
+
+  const result = archiveData[0] || { messageCount: 0, chatTitles: [] }
+
+  return res.json({ 
+    ok: true, 
+    messageCount: result.messageCount,
+    chatTitles: result.chatTitles || []
+  })
+})
+
+const MarkAsReadQuery = z.object({
+  initData: z.string().min(1),
+  chatId: z.string().min(1),
+})
+
+router.post('/messages/mark-as-read', async (req: express.Request, res: express.Response) => {
+  const parsed = MarkAsReadQuery.safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid body' })
+
+  const token = ENV.TELEGRAM_BOT_TOKEN
+  if (!token) return res.status(500).json({ message: 'Server misconfigured' })
+    
+  const v = verifyTelegramInitData(parsed.data.initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
+  if (!v.ok || !v.user) return res.status(401).json({ message: 'Unauthorized' })
+
+  const userId = BigInt(v.user.id)
+  const chatId = parsed.data.chatId
+
+  // Получаем последнее сообщение в чате
+  const lastMessage = await prisma.message.findFirst({
+    where: { 
+      chatId, 
+      deletedAt: null,
+      senderId: { not: userId } // Только сообщения от других пользователей
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true }
+  })
+
+  if (lastMessage) {
+    // Обновляем lastReadMessageId для пользователя
+    await prisma.chatMember.update({
+      where: { 
+        chatId_userId: { chatId, userId }
+      },
+      data: { 
+        lastReadMessageId: lastMessage.id 
+      }
+    })
+  }
+
+  return res.json({ ok: true })
 })
 
 export const messagesRouter = router

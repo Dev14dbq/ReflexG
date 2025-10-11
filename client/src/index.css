@@ -8,7 +8,7 @@
   --color-border: #e9ecef;
   --color-accent-hover: #6a8a76;
   --color-accent-active: #5d7a68;
-  /* Gradient for chat pattern coloring */
+  /* Gradient for theme pattern coloring */
   --pattern-gradient-start: color-mix(in oklab, var(--color-accent) 80%, white 20%);
   --pattern-gradient-end: color-mix(in oklab, var(--color-accent) 80%, black 20%);
   /* Global URL for tiling pattern */
@@ -104,7 +104,6 @@ button:focus-visible {
 
 @keyframes bounce {
   0%, 100% {
-    transform: translateY(-25%);
     animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
   }
   50% {

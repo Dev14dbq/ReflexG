@@ -296,7 +296,12 @@ export default function PrivacyPage(): JSX.Element {
           {/* Архив */}
           <button 
             className="w-full p-4 flex items-center gap-3 hover:bg-[color-mix(in_oklab,var(--color-bg)95%,var(--color-accent)5%)] transition-colors"
-            onClick={() => {}}
+            onClick={() => {
+              toast.info('Архив в разработке', {
+                description: 'Эта функция будет доступна в следующих обновлениях',
+                duration: 3000
+              })
+            }}
           >
             <div className="w-8 h-8 rounded-md bg-[color-mix(in_oklab,var(--color-accent)10%,transparent)] flex items-center justify-center">
               <RiArchiveLine size={20} className="text-[var(--color-accent)]" />

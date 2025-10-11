@@ -10,6 +10,8 @@ const ChatListItemSchema = z.object({
     last: z.string().nullable(),
     time: z.string().nullable(),
   }),
+  unreadCount: z.number().default(0),
+  isRead: z.boolean().default(true),
 })
 
 const ChatListResponseSchema = z.object({

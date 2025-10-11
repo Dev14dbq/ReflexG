@@ -13,7 +13,16 @@ export default function App(): JSX.Element {
         <EntryGate>
           <AppRouter />
         </EntryGate>
-        <Toaster position="top-center" richColors toastOptions={{ className: 'sonner-toast' }} />
+        <Toaster 
+          position="top-center" 
+          richColors 
+          toastOptions={{ 
+            className: 'sonner-toast',
+            style: {
+              top: '40px' // Отступ под хедер
+            }
+          }} 
+        />
       </TelegramAuthProvider>
     </ThemeProvider>
   )

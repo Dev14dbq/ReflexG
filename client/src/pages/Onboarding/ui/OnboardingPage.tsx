@@ -8,6 +8,7 @@ import { useTelegramAuth } from '@/app/providers/TelegramAuthProvider'
 import { GenderEnum, SexEnum, submitBaseProfile } from '@/shared/api/profile'
 import { uploadImage } from '@/shared/api/cdn'
 import { compressImageToJpeg, cropImageTo9x16 } from '@/shared/lib/image'
+import Header from '@/app/layout/Header'
 import { GENDER_FLAG } from '@/shared/lib/gender'
 
 type Step = 'NAME' | 'BIRTHDATE' | 'SEX' | 'GENDER' | 'CITY' | 'PHOTOS' | 'SUBMITTING'
@@ -352,6 +353,7 @@ export default function OnboardingPage(): JSX.Element {
   // Новый layout — центральное поле + фиксированная нижняя панель с кнопками
   return (
     <div className="min-h-screen flex flex-col">
+      <Header title="Okeano" />
       <div className="pt-4">
         {isFlowStep ? (
           <div className="progress-segments max-w-md mx-auto">

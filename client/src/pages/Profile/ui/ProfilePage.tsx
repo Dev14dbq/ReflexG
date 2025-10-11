@@ -192,7 +192,7 @@ export default function ProfilePage(): JSX.Element {
     },
     {
       id: 'chat-settings',
-      title: 'Настройки чатов',
+      title: 'Настройки темы',
       icon: <RiChat3Line size={20} />,
       onClick: () => navigate('/chat-settings')
     },

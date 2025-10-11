@@ -1,6 +1,6 @@
 import { requireEnvUrl } from '@/shared/config/env'
 
-export interface settingsChatResponse {
+export interface settingsThemeResponse {
     ok: true
     settings: {
         userId: string,
@@ -10,9 +10,9 @@ export interface settingsChatResponse {
     }
 }
 
-export async function fetchChatSettings(initData: string,): Promise<settingsChatResponse> {
+export async function fetchThemeSettings(initData: string,): Promise<settingsThemeResponse> {
     const base = requireEnvUrl('API_URL')
-    const url = new URL('settings/chat', base)
+    const url = new URL('settings/theme', base)
   
     url.searchParams.set('initData', initData)
   
@@ -20,6 +20,6 @@ export async function fetchChatSettings(initData: string,): Promise<settingsChat
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     const data = await resp.json()
     if (!data || !data.ok) throw new Error('Bad response')
-    return data as settingsChatResponse
+    return data as settingsThemeResponse
 }
   

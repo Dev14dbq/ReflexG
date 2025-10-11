@@ -35,7 +35,7 @@
   transition: transform 0.1s ease-out, box-shadow 0.1s ease-out;
 }
 
-.page-transition button:hover,
+/*.page-transition button:hover,
 .page-transition [role="button"]:hover,
 .page-transition a:hover {
   transform: translateY(-1px);
@@ -45,7 +45,7 @@
 .page-transition [role="button"]:active,
 .page-transition a:active {
   transform: translateY(0);
-}
+}*/
 
 /* Анимация для карточек профилей */
 .page-transition .profile-card {

@@ -1208,7 +1208,13 @@ export default function ProfileCard({ data, onLike, onDislike, isEditable = fals
                                 setPhotoUploading(prev => prev.map((v, idx) => idx === index ? true : v))
                                 try {
                                   let input: File | Blob = file
-                                  try { input = await compressImageToJpeg(file, 1080, 0.82) } catch {}
+                                  try { 
+                                    input = await compressImageToJpeg(file, 1080, 0.82) 
+                                  } catch (compressError) {
+                                    console.error('Image compression failed:', compressError)
+                                    toast.error('Ошибка обработки изображения. Попробуйте другое фото.')
+                                    return
+                                  }
                                   const up = await uploadImage(input)
                                   if (!up.ok) throw new Error(up.message || 'Не удалось загрузить')
 

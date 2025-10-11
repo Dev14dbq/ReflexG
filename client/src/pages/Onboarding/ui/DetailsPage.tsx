@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { LookingForEnum, submitProfileDetails } from '@/shared/api/profile'
+import Header from '@/app/layout/Header'
 
 function parseBirthDateDDMMYYYY(s: string | null): Date | null {
   if (!s) return null
@@ -143,6 +144,7 @@ export default function DetailsPage(): JSX.Element {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <Header title="Okeano" />
       <div className="pt-5 text-center text-2xl font-semibold">{heading}</div>
       {step === 'LOOKING' ? (
         <div className="mt-1 text-center text-sm text-muted">Также вы можете заполнить дополнительную информацию</div>

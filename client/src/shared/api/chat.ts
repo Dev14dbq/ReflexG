@@ -8,6 +8,8 @@ export interface ChatListItem {
     last: string | null
     time: string | null
   }
+  unreadCount: number
+  isRead: boolean
 }
 
 export interface ChatListResponse {
@@ -60,6 +62,9 @@ export interface ChatMessageItem {
   text: string
   photoUrl: string | null
   createdAt: string
+  replyId: string | null
+  isPinned: boolean
+  isEdit: boolean
 }
 
 export interface ChatHistoryResponse {
@@ -82,4 +87,38 @@ export async function fetchChatMessages(initData: string, chatId: string, cursor
   const data = await resp.json()
   if (!data || !data.ok) throw new Error('Bad response')
   return data as ChatHistoryResponse
+}
+
+export interface ArchiveResponse {
+  ok: true
+  messageCount: number
+  chatTitles: string[]
+}
+
+export async function fetchArchiveData(initData: string): Promise<ArchiveResponse> {
+  const base = requireEnvUrl('API_URL')
+  const url = new URL('chat/archive', base)
+  url.searchParams.set('initData', initData)
+  
+  const resp = await fetch(url.toString())
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const data = await resp.json()
+  if (!data || !data.ok) throw new Error('Bad response')
+  return data as ArchiveResponse
+}
+
+export async function markMessagesAsRead(initData: string, chatId: string): Promise<{ ok: true }> {
+  const base = requireEnvUrl('API_URL')
+  const url = new URL('messages/mark-as-read', base)
+  
+  const resp = await fetch(url.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ initData, chatId })
+  })
+  
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const data = await resp.json()
+  if (!data || !data.ok) throw new Error('Bad response')
+  return data as { ok: true }
 }

@@ -5,16 +5,18 @@ import { IoSend } from "react-icons/io5";
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { fetchChatMessages, type ChatMessageItem, ChatInfo } from '@/shared/api/chat'
+import { fetchChatMessages, type ChatMessageItem, ChatInfo, markMessagesAsRead } from '@/shared/api/chat'
 import { fetchThemeSettings, type settingsThemeResponse } from '@/shared/api/settings'
 import { groupMessagesByDateAndTime } from '@/shared/lib/messageGrouping'
-import { MessageContextMenu } from '@/pages/Chat/ui/MessageContextMenu'
+import { chatStore } from '@/shared/lib/chatStore'
+import MessageContextMenu from '@/pages/Theme/ui/MessageContextMenu'
+import ChatMenu from '@/pages/Theme/ui/ChatMenu'
 import { useTelegramAuth } from '@/app/providers/TelegramAuthProvider'
 import { wsClient } from '@/shared/lib/ws'
 
-import styles from './ChatPage.module.scss'
+import styles from './ThemePage.module.scss'
 
-export default function ChatPage(): JSX.Element {
+export default function ThemePage(): JSX.Element {
   const { chatId } = useParams<{ chatId: string }>()
   
   // Состояние темы
@@ -26,6 +28,8 @@ export default function ChatPage(): JSX.Element {
   const [errorState, setErrorState] = useState<string | null>(null)
   const [pinnedMessages, setPinnedMessages] = useState<Set<string>>(new Set())
   const [showPinnedMessages, setShowPinnedMessages] = useState<boolean>(true)
+  const [isChatMenuOpen, setIsChatMenuOpen] = useState<boolean>(false)
+  const moreButtonRef = useRef<HTMLButtonElement>(null)
 
   // Контекстовое меню
   const [contextMenuData, setContextMenuData] = useState<{
@@ -197,6 +201,18 @@ export default function ChatPage(): JSX.Element {
 
         const messagesResponse = await fetchChatMessages(telegramInitData, chatId)
         setThemeMessages(messagesResponse.items)
+        
+        // Помечаем сообщения как прочитанные
+        try {
+          await markMessagesAsRead(telegramInitData, chatId)
+          // Обновляем статус в chatStore
+          chatStore.updateChatItem(chatId, { 
+            unreadCount: 0, 
+            isRead: true 
+          })
+        } catch (error) {
+          console.error('Failed to mark messages as read:', error)
+        }
       } catch (error: any) {
         console.error('[Error] Chat history:', error)
         setErrorState(`Возникла проблема при загрузки сообщений. Подробнее см. в консоли! (При необходимости обратитесь в поддержку)`)
@@ -327,8 +343,23 @@ export default function ChatPage(): JSX.Element {
   }, [chatId])
 
   const handleMoreActions = () => {
-    // TODO: Добавить меню действий (удаление чата, настройки темы и т.д.)
-    console.log('Открыть меню действий')
+    setIsChatMenuOpen(true)
+  }
+
+  const handleSearch = () => {
+    console.log('Поиск по чату пока не реализован')
+  }
+
+  const handleMute = () => {
+    console.log('Заглушение чата пока не реализовано')
+  }
+
+  const handleDeleteChat = () => {
+    console.log('Удаление чата пока не реализовано')
+  }
+
+  const handleBlockUser = () => {
+    console.log('Блокировка пользователя пока не реализована')
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -420,7 +451,7 @@ export default function ChatPage(): JSX.Element {
         </div>
 
         {/* Кнопка меню действий */}
-        <button className={styles.moreButton} onClick={handleMoreActions}>
+        <button ref={moreButtonRef} className={styles.moreButton} onClick={handleMoreActions}>
           <FiMoreVertical style={{ width: "23", height: "23" }}/>
         </button>
       </div>
@@ -648,6 +679,17 @@ export default function ChatPage(): JSX.Element {
           isOwnMessage={contextMenuData.message.senderId === user?.id?.toString()}
         />
       )}
+
+      {/* Меню действий чата */}
+      <ChatMenu
+        isOpen={isChatMenuOpen}
+        onClose={() => setIsChatMenuOpen(false)}
+        onSearch={handleSearch}
+        onMute={handleMute}
+        onDeleteChat={handleDeleteChat}
+        onBlockUser={handleBlockUser}
+        buttonRef={moreButtonRef}
+      />
     </div>
   )
 }
