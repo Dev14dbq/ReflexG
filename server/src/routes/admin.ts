@@ -33,7 +33,7 @@ router.get('/user/:telegramId', requireAdmin, async (req: express.Request, res: 
       where: { telegramId },
       select: {
         telegramId: true,
-        username: true,
+        // username excluded for privacy
         firstName: true,
         lastName: true,
         role: true,
@@ -117,7 +117,7 @@ router.get('/users', requireAdmin, async (req: express.Request, res: express.Res
       take: limit,
       select: {
         telegramId: true,
-        username: true,
+        // username excluded for privacy
         firstName: true,
         lastName: true,
         role: true,

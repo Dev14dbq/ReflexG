@@ -10,6 +10,7 @@ import ThemeListPage from '@/pages/Theme/ui/ThemeListPage'
 import ThemePage from '@/pages/Theme/ui/ThemePage'
 import ExplorePage from '@/pages/Explore/ui/ExplorePage'
 import LikesPage from '@/pages/Likes/ui/LikesPage'
+import LikesHistoryPage from '@/pages/LikesHistory'
 import OnboardingPage from '@/pages/Onboarding/ui/OnboardingPage'
 import WelcomePage from '@/pages/Onboarding/ui/WelcomePage'
 import PendingModerationPage from '@/pages/Onboarding/ui/PendingModerationPage'
@@ -107,6 +108,7 @@ export function AppRouter(): JSX.Element {
       : p === '/help' ? 'Справка' 
       : p === '/privacy' ? 'Конфиденциальность' 
       : p === '/blacklist' ? 'Черный список'
+      : p === '/likes-history' ? 'История лайков'
       : p === '/chat-settings' ? 'Тема'
       : p === '/recommendations' ? 'Рекомендации'
       : p === '/notifications' ? 'Уведомления'
@@ -116,7 +118,7 @@ export function AppRouter(): JSX.Element {
     // Telegram BackButton integration
     useEffect(() => {
       const webApp = window?.Telegram?.WebApp
-      const showBack = p === '/my-profile' || p === '/help' || p === '/privacy' || p === '/blacklist' || p === '/chat-settings' || p === '/recommendations' || p === '/notifications' || p === '/about-position'
+      const showBack = p === '/my-profile' || p === '/help' || p === '/privacy' || p === '/blacklist' || p === '/likes-history' || p === '/chat-settings' || p === '/recommendations' || p === '/notifications' || p === '/about-position'
       if (!webApp?.BackButton) return
       const onBack = () => navigate(-1)
       try {
@@ -164,6 +166,7 @@ export function AppRouter(): JSX.Element {
                 <Route path="/theme" element={<ThemeListPage />} />
                 <Route path="/theme/:chatId" element={<ThemePage />} />
                 <Route path="/likes" element={<LikesPage />} />
+                <Route path="/likes-history" element={<LikesHistoryPage />} />
                 <Route path="/explore" element={<ExplorePage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/my-profile" element={<MyProfilePage />} />

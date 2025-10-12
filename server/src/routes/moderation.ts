@@ -90,7 +90,6 @@ router.get('/items', requireModerator, async (req: express.Request, res: express
         user: {
           select: {
             telegramId: true,
-            username: true,
             firstName: true,
             lastName: true
           }

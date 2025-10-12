@@ -117,9 +117,9 @@ export function attachWsServer(server: import('http').Server): void {
     const peerUserId = peer?.userId || viewerUserId
     const peerUser = await prisma.user.findUnique({
       where: { telegramId: peerUserId },
-      select: { username: true, firstName: true, photoUrl: true },
+      select: { firstName: true, photoUrl: true },
     })
-    const title = peerUser?.username || peerUser?.firstName || `ID ${String(peerUserId)}`
+    const title = peerUser?.firstName || `ID ${String(peerUserId)}`
     const avatarUrl = peerUser?.photoUrl || null
     const online = isUserOnline(String(peerUserId))
     return { id: chatId, title, avatarUrl, isOnline: online } as const

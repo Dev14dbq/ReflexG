@@ -40,7 +40,7 @@ router.get('/chat/me', async (req: express.Request, res: express.Response) => {
   const rows = await prisma.$queryRaw<Row[]>`
     SELECT 
       cm."chatId" as "chatId",
-      COALESCE(u."username", u."firstName", 'ID ' || u."telegramId") as "title",
+      COALESCE(u."firstName", 'ID ' || u."telegramId") as "title",
       u."photoUrl" as "avatarUrl",
       json_build_object(
         'last', lm."text",
@@ -184,7 +184,7 @@ router.get('/messages/chat-info', async (req: express.Request, res: express.Resp
 
   const chat = {
     id: chatInfo.id,
-    title: otherMember.username || otherMember.firstName || `ID ${otherMember.telegramId}`,
+    title: otherMember.firstName || `ID ${otherMember.telegramId}`,
     avatarUrl: otherMember.photoUrl,
     isOnline: false, // This would need to be tracked separately
   }
@@ -215,7 +215,7 @@ router.get('/chat/archive', async (req: express.Request, res: express.Response) 
   }[]>`
     SELECT 
       COUNT(m."id")::int as "messageCount",
-      array_agg(DISTINCT COALESCE(u."username", u."firstName", 'ID ' || u."telegramId")) as "chatTitles"
+      array_agg(DISTINCT COALESCE(u."firstName", 'ID ' || u."telegramId")) as "chatTitles"
     FROM "ChatMember" cm
     JOIN "Chat" c ON c."id" = cm."chatId"
     JOIN "ChatMember" cm2 ON cm2."chatId" = cm."chatId" AND cm2."userId" <> ${userId}

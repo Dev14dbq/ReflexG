@@ -320,7 +320,7 @@ export default function PrivacyPage(): JSX.Element {
           {/* История лайков */}
           <button 
             className="w-full p-4 flex items-center gap-3 hover:bg-[color-mix(in_oklab,var(--color-bg)95%,var(--color-accent)5%)] transition-colors"
-            onClick={() => {}}
+            onClick={() => navigate('/likes-history')}
           >
             <div className="w-8 h-8 rounded-md bg-[color-mix(in_oklab,var(--color-accent)10%,transparent)] flex items-center justify-center">
               <RiHeartLine size={20} className="text-[var(--color-accent)]" />

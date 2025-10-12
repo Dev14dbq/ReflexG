@@ -634,4 +634,238 @@ router.get('/likes/stats', async (req: express.Request, res: express.Response) =
   }
 })
 
+// Получение истории лайков с фильтрацией и пагинацией
+router.get('/likes/history', async (req: express.Request, res: express.Response) => {
+  const parsed = GetLikesDto.safeParse(req.query)
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'Invalid payload', issues: parsed.error.issues })
+  }
+
+  const { initData, page, limit } = parsed.data
+  const filter = req.query.filter as string || 'all'
+
+  const token = ENV.TELEGRAM_BOT_TOKEN
+  if (!token) return res.status(500).json({ message: 'Server misconfigured: TELEGRAM_BOT_TOKEN is not set' })
+
+  const verification = verifyTelegramInitData(initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
+  if (!verification.ok || !verification.user) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+
+  try {
+    const userId = BigInt(verification.user.id)
+    const offset = (page - 1) * limit
+    
+    // Определяем какие данные загружать в зависимости от фильтра
+    let sentLikes: any[] = []
+    let receivedLikes: any[] = []
+
+    const baseSentWhere: any = {
+      userId: userId,
+      isLike: true,
+      ...(filter === 'matched' ? { matchedAt: { not: null } } : {}),
+      ...(filter === 'unmatched' ? { matchedAt: null } : {})
+    }
+    const baseReceivedWhere: any = {
+      targetUserId: userId,
+      isLike: true,
+      ...(filter === 'matched' ? { matchedAt: { not: null } } : {}),
+      ...(filter === 'unmatched' ? { matchedAt: null } : {})
+    }
+
+    if (filter === 'all' || filter === 'my-likes' || filter === 'matched' || filter === 'unmatched') {
+      // Для matched убираем пагинацию на уровне БД и пагинируем после дедупликации
+      sentLikes = await prisma.like.findMany({
+        where: baseSentWhere,
+        include: {
+          target: {
+            select: {
+              telegramId: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              photoUrl: true,
+              customPhotoUrl: true,
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        ...(filter === 'matched' ? {} : { skip: offset, take: limit })
+      })
+    }
+
+    if (filter === 'all' || filter === 'received-likes' || filter === 'matched' || filter === 'unmatched') {
+      receivedLikes = await prisma.like.findMany({
+        where: baseReceivedWhere,
+        include: {
+          user: {
+            select: {
+              telegramId: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              photoUrl: true,
+              customPhotoUrl: true,
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        ...(filter === 'matched' ? {} : { skip: offset, take: limit })
+      })
+    }
+
+    // Объединяем и форматируем данные
+    let allLikes = [
+      ...sentLikes.map(like => ({
+        id: `${like.userId}_${like.targetUserId}`,
+        userId: like.target.telegramId.toString(),
+        username: null,
+        firstName: like.target.firstName,
+        lastName: like.target.lastName,
+        photoUrl: like.target.customPhotoUrl || like.target.photoUrl,
+        likedAt: like.createdAt.toISOString(),
+        isMatched: !!like.matchedAt,
+        matchedAt: like.matchedAt?.toISOString() || null,
+        isMyLike: true
+      })),
+      ...receivedLikes.map(like => ({
+        id: `${like.userId}_${like.targetUserId}`,
+        userId: like.user.telegramId.toString(),
+        username: null,
+        firstName: like.user.firstName,
+        lastName: like.user.lastName,
+        photoUrl: like.user.customPhotoUrl || like.user.photoUrl,
+        likedAt: like.createdAt.toISOString(),
+        isMatched: !!like.matchedAt,
+        matchedAt: like.matchedAt?.toISOString() || null,
+        isMyLike: false
+      }))
+    ]
+
+    if (filter === 'matched') {
+      // Дедупликация по собеседнику (userId) с выбором самого свежего
+      const map = new Map<string, any>()
+      for (const item of allLikes) {
+        const key = item.userId
+        const prev = map.get(key)
+        const prevTime = prev ? new Date(prev.matchedAt || prev.likedAt).getTime() : -1
+        const curTime = new Date(item.matchedAt || item.likedAt).getTime()
+        if (!prev || curTime > prevTime) {
+          map.set(key, item)
+        }
+      }
+      allLikes = Array.from(map.values()).sort((a, b) => new Date(b.matchedAt || b.likedAt).getTime() - new Date(a.matchedAt || a.likedAt).getTime())
+      // Пагинация после дедупликации
+      const total = allLikes.length
+      const start = (page - 1) * limit
+      const end = start + limit
+      const paginated = allLikes.slice(start, end)
+
+      // Получаем общую статистику (без пагинации)
+      const [totalSentCount, totalReceivedCount, totalMatchedCount] = await Promise.all([
+        prisma.like.count({ where: { userId: userId, isLike: true } }),
+        prisma.like.count({ where: { targetUserId: userId, isLike: true } }),
+        prisma.like.count({ where: { userId: userId, isLike: true, matchedAt: { not: null } } })
+      ])
+
+      const stats = {
+        totalCount: totalSentCount + totalReceivedCount,
+        myLikesCount: totalSentCount,
+        receivedLikesCount: totalReceivedCount,
+        matchedCount: totalMatchedCount
+      }
+
+      return res.json({
+        ok: true,
+        likes: paginated,
+        ...stats,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+          hasNext: end < total,
+          hasPrev: page > 1,
+        }
+      })
+    }
+
+    allLikes = allLikes.sort((a, b) => new Date(b.likedAt).getTime() - new Date(a.likedAt).getTime())
+
+    // Получаем общую статистику (без пагинации)
+    const [totalSentCount, totalReceivedCount, totalMatchedCount] = await Promise.all([
+      prisma.like.count({ where: { userId: userId, isLike: true } }),
+      prisma.like.count({ where: { targetUserId: userId, isLike: true } }),
+      prisma.like.count({ where: { userId: userId, isLike: true, matchedAt: { not: null } } })
+    ])
+
+    const stats = {
+      totalCount: totalSentCount + totalReceivedCount,
+      myLikesCount: totalSentCount,
+      receivedLikesCount: totalReceivedCount,
+      matchedCount: totalMatchedCount
+    }
+
+    return res.json({
+      ok: true,
+      likes: allLikes,
+      ...stats,
+      pagination: {
+        page,
+        limit,
+        total: stats.totalCount,
+        pages: Math.ceil(stats.totalCount / limit),
+        hasNext: offset + limit < stats.totalCount,
+        hasPrev: page > 1,
+      }
+    })
+  } catch (e) {
+    console.error('[LIKES HTTP] Error fetching likes history:', e)
+    return res.status(500).json({ message: 'Internal error' })
+  }
+})
+
+// Очистка старых лайков (старше 2 недель, только мои лайки)
+router.post('/likes/clear-old', async (req: express.Request, res: express.Response) => {
+  const { initData } = req.body
+  
+  if (!initData) {
+    return res.status(400).json({ message: 'initData is required' })
+  }
+
+  const token = ENV.TELEGRAM_BOT_TOKEN
+  if (!token) return res.status(500).json({ message: 'Server misconfigured: TELEGRAM_BOT_TOKEN is not set' })
+
+  const verification = verifyTelegramInitData(initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
+  if (!verification.ok || !verification.user) {
+    return res.status(401).json({ message: 'Unauthorized' })
+  }
+
+  try {
+    const userId = BigInt(verification.user.id)
+    const twoWeeksAgo = new Date()
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
+
+    // Удаляем только мои лайки старше 2 недель
+    const deleteResult = await prisma.like.deleteMany({
+      where: {
+        userId: userId,
+        isLike: true,
+        createdAt: {
+          lt: twoWeeksAgo
+        }
+      }
+    })
+
+    return res.json({
+      ok: true,
+      clearedCount: deleteResult.count,
+      message: `Удалено ${deleteResult.count} старых лайков`
+    })
+  } catch (e) {
+    console.error('[LIKES HTTP] Error clearing old likes:', e)
+    return res.status(500).json({ message: 'Internal error' })
+  }
+})
+
 export const likesRouter = router
