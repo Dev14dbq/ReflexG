@@ -6,25 +6,12 @@ import { wsClient } from '@/shared/lib/ws'
 import BottomNav from '@/app/layout/BottomNav'
 import AdminBottomNav from '@/app/layout/AdminBottomNav'
 import Header from '@/app/layout/Header'
-import ThemeListPage from '@/pages/Theme/ui/ThemeListPage'
-import ThemePage from '@/pages/Theme/ui/ThemePage'
-import ExplorePage from '@/pages/Explore/ui/ExplorePage'
-import LikesPage from '@/pages/Likes/ui/LikesPage'
-import LikesHistoryPage from '@/pages/LikesHistory'
+import DesktopLayout from '@/app/layout/DesktopLayout'
+import { MobileRoutes, DesktopRoutes } from './Routes'
 import OnboardingPage from '@/pages/Onboarding/ui/OnboardingPage'
 import WelcomePage from '@/pages/Onboarding/ui/WelcomePage'
 import PendingModerationPage from '@/pages/Onboarding/ui/PendingModerationPage'
 import DetailsPage from '@/pages/Onboarding/ui/DetailsPage'
-import ProfilePage from '@/pages/Profile/ui/ProfilePage'
-import MyProfilePage from '@/pages/MyProfile'
-import HelpPage from '@/pages/Help'
-import PrivacyPage from '@/pages/Privacy'
-import BlacklistPage from '@/pages/Blacklist'
-import ThemeSettingsPage from '@/pages/ThemeSettings'
-import RecommendationsPage from '@/pages/Recommendations'
-import NotificationsPage from '@/pages/Notifications'
-import AboutPositionPage from '@/pages/AboutPosition'
-import { AdminPage, ModerationPage, UsersPage } from '@/pages/Admin'
 import { useTelegramAuth } from '@/app/providers/TelegramAuthProvider'
 import { getProfileStatus, getUserInfo } from '@/shared/api/profile'
 import type { UserInfoResponse } from '@/shared/api/profile'
@@ -100,6 +87,37 @@ export function AppRouter(): JSX.Element {
     return !shouldHideBottomNav(pathname) ? <BottomNav /> : null
   }
 
+  function LayoutSwitcher(): JSX.Element {
+    const location = useLocation()
+    const pathname = location.pathname
+    
+    // Для десктопа используем DesktopLayout
+    if (window.innerWidth >= 1024) {
+      return <DesktopLayout><DesktopRoutes /></DesktopLayout>
+    }
+    
+    // Для мобильных устройств используем старую раскладку
+    const bottomForMain = shouldHideBottomNav(pathname) ? '0px' : '80px'
+    return (
+      <div className="">{/* reserve space for bottom nav */}
+        <HeaderSwitcher />
+        <main className="fixed left-0 right-0" style={{ top: '100px', bottom: bottomForMain, overflow: 'auto' }}>
+          <PageTransition>
+            <div className="h-full">
+              <MobileRoutes />
+            </div>
+          </PageTransition>
+        </main>
+        
+        {/* Показываем соответствующее нижнее меню */}
+        <BottomNavSwitcher />
+        
+        {/* Глобальные уведомления */}
+        <LikesNotification />
+      </div>
+    )
+  }
+
   function HeaderSwitcher(): JSX.Element {
     const location = useLocation()
     const navigate = useNavigate()
@@ -156,45 +174,7 @@ export function AppRouter(): JSX.Element {
             {started ? <OnboardingPage /> : <WelcomePage onStart={() => setStarted(true)} />}
           </PageTransition>
         ) : (
-          <div className="">{/* reserve space for bottom nav */}
-            <HeaderSwitcher />
-            <main className="fixed left-0 right-0" style={{ top: '100px', bottom: '80px', overflow: 'auto' }}>
-            <PageTransition>
-              <div className="h-full">
-                <Routes>
-                <Route path="/" element={<Navigate to="/theme" replace />} />
-                <Route path="/theme" element={<ThemeListPage />} />
-                <Route path="/theme/:chatId" element={<ThemePage />} />
-                <Route path="/likes" element={<LikesPage />} />
-                <Route path="/likes-history" element={<LikesHistoryPage />} />
-                <Route path="/explore" element={<ExplorePage />} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/my-profile" element={<MyProfilePage />} />
-                <Route path="/help" element={<HelpPage />} />
-                <Route path="/privacy" element={<PrivacyPage />} />
-                <Route path="/blacklist" element={<BlacklistPage />} />
-                <Route path="/chat-settings" element={<ThemeSettingsPage />} />
-                <Route path="/recommendations" element={<RecommendationsPage />} />
-                <Route path="/notifications" element={<NotificationsPage />} />
-                <Route path="/about-position" element={<AboutPositionPage />} />
-                
-                {/* Админские роуты - всегда доступны, но защищены внутри компонентов */}
-                <Route path="/admin" element={<AdminPage />} />
-                <Route path="/admin/moderation" element={<ModerationPage />} />
-                <Route path="/admin/users" element={<UsersPage />} />
-                
-                <Route path="*" element={<Navigate to="/theme" replace />} />
-              </Routes>
-              </div>
-            </PageTransition>
-            </main>
-            
-            {/* Показываем соответствующее нижнее меню */}
-            <BottomNavSwitcher />
-            
-            {/* Глобальные уведомления */}
-            <LikesNotification />
-          </div>
+          <LayoutSwitcher />
         )}
       </BrowserRouter>
     </Suspense>

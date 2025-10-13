@@ -363,8 +363,14 @@ export default function ThemePage(): JSX.Element {
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    localStorage.setItem(`chat_${chatId}_Draft`, e.target.value)
-    setInputMessage(e.target.value)
+    const value = e.target.value
+    localStorage.setItem(`chat_${chatId}_Draft`, value)
+    setInputMessage(value)
+    
+    // Автоматическое изменение высоты textarea
+    const textarea = e.target
+    textarea.style.height = 'auto'
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px'
   }
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -391,6 +397,12 @@ export default function ThemePage(): JSX.Element {
     // Очищаем черновик после отправки сообщения
     localStorage.removeItem(`chat_${chatId}_Draft`)
     setInputMessage('')
+    
+    // Сбрасываем высоту textarea
+    if (messageInputRef.current) {
+      messageInputRef.current.style.height = 'auto'
+      messageInputRef.current.style.height = '44px'
+    }
   }
 
   /* Обработка ошибок */
@@ -557,7 +569,7 @@ export default function ThemePage(): JSX.Element {
                 <span className={styles.dateDivider}>{dateGroup.label}</span>
 
                 {dateGroup.groups.map((messageGroup, groupIndex) => (
-                  <div key={groupIndex} className={styles.messageGroup}>
+                  <div key={groupIndex} className={`${styles.messageGroup} ${styles['message-group']}`}>
                     {messageGroup.map((message, messageIndex) => {
                       const isOwnMessage = message.senderId === user?.id?.toString()
                       const isFirstInGroup = messageIndex === 0
@@ -577,7 +589,7 @@ export default function ThemePage(): JSX.Element {
                       return (
                         <div 
                           key={message.id} 
-                          className={messageClasses}
+                          className={`${messageClasses} ${styles['animate-message-appear']}`}
                           data-message-id={message.id}
                           onContextMenu={(e) => {
                             e.preventDefault()
@@ -587,7 +599,7 @@ export default function ThemePage(): JSX.Element {
                           <div className={styles.messageContent}>
                             {/* Фото в сообщении */}
                             {message.photoUrl && (
-                              <img src={message.photoUrl} alt="Фото" className={styles.messagePhoto} />
+                              <img src={message.photoUrl} alt="Фото" className={`${styles.messagePhoto} ${styles['message-photo']}`} />
                             )}
                             
                             {/* Текстовое сообщение с временем */}
@@ -596,7 +608,7 @@ export default function ThemePage(): JSX.Element {
                                 <span className={styles.messageText}>
                                   {message.text}
                                 </span>
-                                <span className={styles.messageTime}>
+                                <span className={`${styles.messageTime} ${styles['message-time']}`}>
                                   {new Date(message.createdAt).toLocaleTimeString('ru-RU', { 
                                     hour: '2-digit', 
                                     minute: '2-digit' 
@@ -688,7 +700,7 @@ export default function ThemePage(): JSX.Element {
         onMute={handleMute}
         onDeleteChat={handleDeleteChat}
         onBlockUser={handleBlockUser}
-        buttonRef={moreButtonRef}
+        buttonRef={moreButtonRef as any}
       />
     </div>
   )

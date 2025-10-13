@@ -1,0 +1,218 @@
+/* Анимации для сообщений */
+@keyframes messageAppear {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes messageSlideInOwn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes messageTyping {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
+}
+
+.animate-message-appear {
+  animation: messageAppear 0.3s ease-out;
+}
+
+.animate-message-slide-in {
+  animation: messageSlideIn 0.3s ease-out;
+}
+
+.animate-message-slide-in-own {
+  animation: messageSlideInOwn 0.3s ease-out;
+}
+
+.animate-message-typing {
+  animation: messageTyping 1.5s ease-in-out infinite;
+}
+
+/* Анимация для новых сообщений */
+.message-new {
+  animation: messageAppear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Анимация для отправляемых сообщений */
+.message-sending {
+  opacity: 0.7;
+  animation: messageTyping 1s ease-in-out infinite;
+}
+
+/* Анимация для ошибки отправки */
+.message-error {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+/* Плавная анимация для группы сообщений */
+.message-group {
+  animation: messageGroupAppear 0.2s ease-out;
+}
+
+@keyframes messageGroupAppear {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Анимация для хвостиков */
+.message-tail {
+  animation: tailAppear 0.3s ease-out 0.1s both;
+}
+
+@keyframes tailAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Анимация для времени сообщения */
+.message-time {
+  animation: timeAppear 0.2s ease-out 0.2s both;
+}
+
+@keyframes timeAppear {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Анимация для фото в сообщении */
+.message-photo {
+  animation: photoAppear 0.4s ease-out;
+}
+
+@keyframes photoAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Анимация для редактируемых сообщений */
+.message-edited {
+  animation: editedPulse 0.3s ease-out;
+}
+
+@keyframes editedPulse {
+  0% {
+    background-color: var(--color-accent);
+    transform: scale(1);
+  }
+  50% {
+    background-color: color-mix(in oklab, var(--color-accent) 80%, white 20%);
+    transform: scale(1.02);
+  }
+  100% {
+    background-color: var(--color-accent);
+    transform: scale(1);
+  }
+}
+
+/* Анимация для закрепленных сообщений */
+.message-pinned {
+  animation: pinnedGlow 0.5s ease-out;
+}
+
+@keyframes pinnedGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+  }
+}
+
+/* Адаптация для мобильных устройств */
+@media (max-width: 768px) {
+  .animate-message-appear {
+    animation-duration: 0.25s;
+  }
+  
+  .animate-message-slide-in,
+  .animate-message-slide-in-own {
+    animation-duration: 0.25s;
+  }
+}
+
+/* Уменьшение анимаций для пользователей с предпочтением уменьшенной анимации */
+@media (prefers-reduced-motion: reduce) {
+  .animate-message-appear,
+  .animate-message-slide-in,
+  .animate-message-slide-in-own,
+  .animate-message-typing,
+  .message-new,
+  .message-sending,
+  .message-error,
+  .message-group,
+  .message-tail,
+  .message-time,
+  .message-photo,
+  .message-edited,
+  .message-pinned {
+    animation: none;
+  }
+}

@@ -1,12 +1,16 @@
+/* Основной контейнер - простой flexbox layout */
 .container {
   width: 100%;
-  height: 77vh;
-  position: relative;
+  height: 100vh;
+  height: 100dvh; /* Динамическая высота viewport для мобильных */
   display: flex;
   flex-direction: column;
+  position: relative;
+  background: var(--color-bg);
   overflow: hidden;
 }
 
+/* Header - всегда закреплен сверху */
 .header {
   position: fixed;
   top: 0;
@@ -17,6 +21,13 @@
   justify-content: space-between;
   background: color-mix(in oklab, var(--color-bg) 95%, var(--color-accent) 5%);
   border-bottom: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent);
+  height: 60px;
+  padding: 0 16px;
+  z-index: 100;
+  /* Исправляем проблемы с мобильными браузерами */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .backButton {
@@ -130,7 +141,7 @@
   }
 }
 
-/* Pinned messages section */
+/* Pinned messages section - закреплена под header */
 .pinnedMessagesSection {
   position: fixed;
   top: 60px; /* Под header */
@@ -138,8 +149,12 @@
   right: 0;
   background: color-mix(in oklab, var(--color-bg) 95%, var(--color-accent) 5%);
   border-bottom: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent);
-  z-index: 10;
+  z-index: 90;
   animation: slideDown 0.3s ease;
+  /* Исправляем проблемы с мобильными браузерами */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 @keyframes slideDown {
@@ -298,19 +313,20 @@
 }
 
 /* Theme content area */
- .chatContent {
-   flex: 1;
-   overflow-y: auto;
-   display: flex;
-   flex-direction: column;
-   min-height: 0; /* Важно для flexbox */
-   margin-top: 60px; /* Отступ для header */
-   
-   /* Дополнительный отступ если есть закрепленные сообщения */
-   &.withPinned {
-     margin-top: 120px; /* header + pinned messages */
-   }
- }
+.chatContent {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Важно для flexbox */
+  position: relative;
+  padding-top: 60px; /* Отступ для header */
+  padding-bottom: 80px; /* Отступ для composer */
+  
+  /* Дополнительный отступ если есть закрепленные сообщения */
+  &.withPinned {
+    padding-top: 120px; /* header + pinned messages */
+  }
+}
 
 /* Empty theme state */
 .emptyChat {
@@ -321,6 +337,7 @@
   height: 100%;
   text-align: center;
   color: var(--color-muted);
+  padding: 32px 16px;
 }
 
 .emptyIcon {
@@ -394,6 +411,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 16px;
 }
 
 .dateGroup {
@@ -426,7 +444,8 @@
 .messageGroup {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
+  margin-bottom: 4px;
 }
 
 /* Message styles */
@@ -434,10 +453,11 @@
   display: flex;
   flex-direction: column;
   max-width: 70%;
-  animation: fadeIn 0.3s ease;
+  animation: messageAppear 0.3s ease-out;
   align-items: flex-start;
   position: relative;
   user-select: none;
+  margin-bottom: 2px;
 
   @media (pointer: coarse) {
     &:active {
@@ -502,37 +522,39 @@
   &.messageSingle::after {
     content: '';
     position: absolute;
-    bottom: -1px; /* Сдвигаем на 1px вниз, чтобы уголок доходил до самого угла */
-    right: -8px; /* Позиционируем иконку справа от сообщения */
-    width: 15px;
-    height: 20px;
+    bottom: 0px; /* Убираем сдвиг вниз */
+    right: -6px; /* Уменьшаем отступ от сообщения */
+    width: 12px;
+    height: 18px;
     background-color: var(--color-accent); /* Цвет под сообщением */
-    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
-    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(-1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(-1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
     -webkit-mask-size: contain;
     mask-size: contain;
     pointer-events: none;
-    transform: scaleX(-1); /* Отзеркаливаем иконку по горизонтали */
+    /* На мобильных для своих сообщений хвостик без отражения, чтобы указывать вправо */
+    transform: none;
   }
 
   &.messageLast::after {
     content: '';
     position: absolute;
-    bottom: -1px; /* Сдвигаем на 1px вниз, чтобы уголок доходил до самого угла */
-    right: -9px; /* Позиционируем иконку справа от сообщения */
-    width: 14px;
-    height: 19px;
+    bottom: 0px; /* Убираем сдвиг вниз */
+    right: -7px; /* Уменьшаем отступ от сообщения */
+    width: 11px;
+    height: 17px;
     background-color: var(--color-accent); /* Цвет под сообщением */
-    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
-    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(-1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 11 20' width='11' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg transform='translate(9 -14)' fill='%23ffffff' fill-rule='evenodd'%3E%3Cpath d='M-6 16h6v17c-.193-2.84-.876-5.767-2.05-8.782-.904-2.325-2.446-4.485-4.625-6.48A1 1 0 01-6 16z' transform='matrix(-1 0 0 -1 0 49)'%3E%3C/path%3E%3C/g%3E%3C/svg%3E");
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
     -webkit-mask-size: contain;
     mask-size: contain;
     pointer-events: none;
-    transform: scaleX(-1); /* Отзеркаливаем иконку по горизонтали */
+    /* На мобильных для своих сообщений хвостик без отражения, чтобы указывать вправо */
+    transform: none;
   }
 
   .messageTime {
@@ -626,6 +648,8 @@
   padding: 9px 13px;
   display: inline-block;
   max-width: fit-content;
+  border-radius: 18px;
+  position: relative;
 }
 
 .messageTextContainer {
@@ -641,6 +665,7 @@
   line-height: 1.4;
   min-width: 0;
   user-select: text;
+  font-size: 16px;
 
   @media (pointer: fine) {
     user-select: text;
@@ -652,11 +677,12 @@
 }
 
 .messageTime {
-  font-size: 9px;
+  font-size: 11px;
   white-space: nowrap;
   flex-shrink: 0;
   line-height: 1;
   user-select: none;
+  opacity: 0.7;
 }
 
 
@@ -674,6 +700,7 @@
   border-radius: 12px;
   margin-bottom: 8px;
   display: block;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 
@@ -714,21 +741,12 @@
     padding: 7px;
   }
   
-  .chatContent {
-    margin-top: 72px;
-    padding: 12px;
-  }
-  
-  .message {
-    max-width: 85%;
-  }
-  
   .userName {
     font-size: 14px;
   }
 }
 
-/* Composer (input area) fixed at bottom - replaces bottom nav */
+/* Composer (input area) - всегда закреплен снизу */
 .composer {
   position: fixed;
   left: 0;
@@ -738,6 +756,13 @@
   border-top: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent);
   display: flex;
   align-items: center;
+  padding: 10px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  z-index: 50;
+  /* Исправляем проблемы с мобильными браузерами */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 @font-face {
@@ -783,8 +808,11 @@
   padding: 10px;
   outline: none;
   resize: none;
-  overflow: hidden;
+  overflow-y: auto;
   font-size: 18px;
+  min-height: 44px;
+  max-height: 120px;
+  line-height: 1.4;
 
   &:focus,
   &:focus-visible {
@@ -799,4 +827,159 @@
   align-items: center;
   justify-content: center;
   cursor: auto;
+}
+
+/* Анимации для сообщений */
+@keyframes messageAppear {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-message-appear {
+  animation: messageAppear 0.3s ease-out;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes messageSlideInOwn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Анимация для хвостиков */
+.messageSingle::after,
+.messageLast::after {
+  animation: tailAppear 0.3s ease-out 0.1s both;
+}
+
+@keyframes tailAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Анимация для времени сообщения */
+.messageTime {
+  animation: timeAppear 0.2s ease-out 0.2s both;
+}
+
+.message-time {
+  animation: timeAppear 0.2s ease-out 0.2s both;
+}
+
+@keyframes timeAppear {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Анимация для фото в сообщении */
+.messagePhoto {
+  animation: photoAppear 0.4s ease-out;
+}
+
+.message-photo {
+  animation: photoAppear 0.4s ease-out;
+}
+
+/* Анимация для групп сообщений */
+.message-group {
+  animation: messageAppear 0.3s ease-out;
+}
+
+@keyframes photoAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Уменьшение анимаций для пользователей с предпочтением уменьшенной анимации */
+@media (prefers-reduced-motion: reduce) {
+  .message,
+  .messageSingle::after,
+  .messageLast::after,
+  .messageTime,
+  .messagePhoto,
+  .animate-message-appear,
+  .message-time,
+  .message-photo,
+  .message-group {
+    animation: none;
+  }
+}
+
+/* Мобильные устройства - исправляем проблемы с фиксированными позициями */
+@media (max-width: 768px) {
+  .container {
+    /* Используем только dvh на мобильных */
+    height: 100dvh;
+    /* Предотвращаем скролл страницы */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+  
+  .header {
+    /* Дополнительная стабилизация для мобильных */
+    position: fixed !important;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  
+  .pinnedMessagesSection {
+    /* Дополнительная стабилизация для мобильных */
+    position: fixed !important;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  
+  .composer {
+    /* Дополнительная стабилизация для мобильных */
+    position: fixed !important;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  
+  .chatContent {
+    /* Убираем возможные проблемы с прокруткой */
+    -webkit-overflow-scrolling: touch;
+  }
 }

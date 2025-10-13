@@ -514,7 +514,8 @@
     -webkit-mask-size: contain;
     mask-size: contain;
     pointer-events: none;
-    transform: scaleX(-1); /* Отзеркаливаем иконку по горизонтали */
+    /* На мобильных для своих сообщений хвостик без отражения, чтобы указывать вправо */
+    transform: none;
   }
 
   &.messageLast::after {
@@ -532,7 +533,8 @@
     -webkit-mask-size: contain;
     mask-size: contain;
     pointer-events: none;
-    transform: scaleX(-1); /* Отзеркаливаем иконку по горизонтали */
+    /* На мобильных для своих сообщений хвостик без отражения, чтобы указывать вправо */
+    transform: none;
   }
 
   .messageTime {
@@ -625,7 +627,7 @@
 .messageContent {
   padding: 9px 13px;
   display: inline-block;
-  max-width: fit-content;
+  max-width: 100%;
 }
 
 .messageTextContainer {
@@ -638,6 +640,7 @@
 .messageText {
   flex: 1;
   word-break: break-word;
+  overflow-wrap: anywhere;
   line-height: 1.4;
   min-width: 0;
   user-select: text;
@@ -738,6 +741,9 @@
   border-top: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent);
   display: flex;
   align-items: center;
+  padding: 10px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  z-index: 50;
 }
 
 @font-face {
@@ -774,6 +780,7 @@
   flex: 1 1 auto;
   display: flex;
   align-items: center;
+  position: relative;
 }
 
 .textarea {
@@ -799,4 +806,20 @@
   align-items: center;
   justify-content: center;
   cursor: auto;
+}
+
+/* Character counter */
+.characterCounter {
+  position: absolute;
+  bottom: 8px;
+  right: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 10;
+  background: color-mix(in oklab, var(--color-bg) 90%, var(--color-accent) 10%);
+  padding: 4px 8px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent);
+  backdrop-filter: blur(8px);
 }

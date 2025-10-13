@@ -146,10 +146,10 @@ const MessageContextMenu: React.FC<Props> = ({
     // Удалить (только для своих сообщений)
     ...(isOwnMessage ? [{
       key: 'delete',
-      icon: <FiTrash2 />,
+      icon: <FiTrash2 data-icon="trash-2" />,
       label: 'Удалить',
       onClick: menuActions.delete,
-      className: `${styles.menuItem} ${styles.dangerItem}`
+      className: styles.menuItem
     }] : [])
   ];
 
@@ -162,18 +162,26 @@ const MessageContextMenu: React.FC<Props> = ({
   };
 
   return (
-    <div ref={menuRef} style={menuStyles} className={styles.contextMenu}>
-      {menuItems.map((item) => (
-        <button
-          key={item.key}
-          className={item.className}
-          onClick={item.onClick}
-        >
-          {item.icon}
-          <span>{item.label}</span>
-        </button>
-      ))}
-    </div>
+    <>
+      {/* Overlay для закрытия меню */}
+      <div className={styles.overlay} onClick={onClose} />
+      
+      {/* Меню */}
+      <div ref={menuRef} style={menuStyles} className={styles.contextMenu}>
+        {menuItems.map((item) => (
+          <button
+            key={item.key}
+            className={item.className}
+            onClick={item.onClick}
+          >
+            <div className={styles.icon}>
+              {item.icon}
+            </div>
+            <span className={styles.label}>{item.label}</span>
+          </button>
+        ))}
+      </div>
+    </>
   );
 };
 
