@@ -45,12 +45,18 @@ export function attachWsServer(server: import('http').Server): void {
   const incrementOnline = (userId: string) => {
     const current = onlineUsers.get(userId) || 0
     onlineUsers.set(userId, current + 1)
+    console.log(`[WS ONLINE] User ${userId} online count: ${current + 1}`)
   }
 
   const decrementOnline = (userId: string) => {
     const current = onlineUsers.get(userId) || 0
-    if (current <= 1) onlineUsers.delete(userId)
-    else onlineUsers.set(userId, current - 1)
+    if (current <= 1) {
+      onlineUsers.delete(userId)
+      console.log(`[WS ONLINE] User ${userId} went offline (count was ${current})`)
+    } else {
+      onlineUsers.set(userId, current - 1)
+      console.log(`[WS ONLINE] User ${userId} online count: ${current - 1}`)
+    }
   }
 
   const isUserOnline = (userId: string): boolean => onlineUsers.has(userId)
@@ -126,17 +132,36 @@ export function attachWsServer(server: import('http').Server): void {
   }
 
   async function broadcastPresenceForUser(userId: string, isOnlineNow: boolean) {
+    console.log(`[WS PRESENCE] User ${userId} ${isOnlineNow ? 'came online' : 'went offline'}`)
+    
     // Find all chats of this user
     const memberships = await prisma.chatMember.findMany({ where: { userId: BigInt(userId) }, select: { chatId: true } })
+    console.log(`[WS PRESENCE] User ${userId} is member of ${memberships.length} chats:`, memberships.map(m => m.chatId))
+    
     for (const m of memberships) {
       const subs = chatSubscriptions.get(m.chatId)
-      if (!subs || subs.size === 0) continue
+      if (!subs || subs.size === 0) {
+        console.log(`[WS PRESENCE] No subscribers for chat ${m.chatId}`)
+        continue
+      }
+      
+      console.log(`[WS PRESENCE] Broadcasting to ${subs.size} subscribers of chat ${m.chatId}`)
+      
       for (const ws of subs) {
         const client = clients.get(ws)
         if (!client) continue
+        
         try {
+          // Отправляем в канал messages (для существующей функциональности)
           ws.send(JSON.stringify({ ch: 'messages', t: 'presence', data: { chatId: m.chatId, userId, isOnline: isOnlineNow } }))
-        } catch {}
+          
+          // Отправляем в канал chats (для новой функциональности списка чатов)
+          ws.send(JSON.stringify({ ch: 'chats', t: isOnlineNow ? 'userOnline' : 'userOffline', data: { userId, chatId: m.chatId, isOnline: isOnlineNow } }))
+          
+          console.log(`[WS PRESENCE] Sent presence update to user ${client.userId} for chat ${m.chatId}`)
+        } catch (error) {
+          console.error(`[WS PRESENCE] Failed to send presence update to user ${client.userId}:`, error)
+        }
       }
     }
   }
@@ -165,6 +190,7 @@ export function attachWsServer(server: import('http').Server): void {
       
       // Для /ws/messages добавляем в online пользователей
       if (pathname === '/ws/messages') {
+        console.log(`[WS CONNECT] User ${userId} connected to messages WebSocket`)
         incrementOnline(String(userId))
         void broadcastPresenceForUser(String(userId), true)
       }
@@ -173,6 +199,7 @@ export function attachWsServer(server: import('http').Server): void {
         clients.delete(ws)
         // Для /ws/messages убираем из online пользователей
         if (pathname === '/ws/messages') {
+          console.log(`[WS DISCONNECT] User ${userId} disconnected from messages WebSocket`)
           decrementOnline(String(userId))
           void broadcastPresenceForUser(String(userId), false)
         }
@@ -323,7 +350,17 @@ export function attachWsServer(server: import('http').Server): void {
               }
             }
           }
-          if (msg.ch === 'messages') {
+          if (msg.ch === 'chats') {
+            if (msg.t === 'subscribe') {
+              console.log(`[WS CHATS] User ${client.userId} subscribed to chats channel`)
+              // Для канала chats не нужна подписка на конкретный чат,
+              // пользователь получает все события чатов
+              ws.send(JSON.stringify({ ch: 'chats', t: 'subscribed', cid: msg.cid }))
+            } else if (msg.t === 'unsubscribe') {
+              console.log(`[WS CHATS] User ${client.userId} unsubscribed from chats channel`)
+              ws.send(JSON.stringify({ ch: 'chats', t: 'unsubscribed', cid: msg.cid }))
+            }
+          } else if (msg.ch === 'messages') {
             if (msg.t === 'subscribe') {
               const parsed = SubscribeSchema.safeParse(msg.data)
               if (!parsed.success) {
@@ -341,6 +378,15 @@ export function attachWsServer(server: import('http').Server): void {
               if (!chatSubscriptions.has(chatId)) chatSubscriptions.set(chatId, new Set())
               chatSubscriptions.get(chatId)!.add(ws)
               ws.send(JSON.stringify({ ch: 'messages', t: 'chat_info', cid: msg.cid, data: info }))
+
+              // Сразу после подписки отдаем текущее состояние presence
+              try {
+                const members = await prisma.chatMember.findMany({ where: { chatId }, select: { userId: true } })
+                const presences = members.map(m => ({ userId: String(m.userId), isOnline: isUserOnline(String(m.userId)) }))
+                ws.send(JSON.stringify({ ch: 'chats', t: 'presenceSnapshot', data: { chatId, presences } }))
+              } catch (e) {
+                console.error('[WS] Failed to send presence snapshot:', e)
+              }
             } else if (msg.t === 'unsubscribe') {
               const parsed = SubscribeSchema.safeParse(msg.data)
               if (!parsed.success) return

@@ -10,6 +10,8 @@ export interface ChatListItem {
   }
   unreadCount: number
   isRead: boolean
+  isOnline?: boolean
+  lastSeen?: string
 }
 
 export interface ChatListResponse {
@@ -105,6 +107,48 @@ export async function fetchArchiveData(initData: string): Promise<ArchiveRespons
   const data = await resp.json()
   if (!data || !data.ok) throw new Error('Bad response')
   return data as ArchiveResponse
+}
+
+// Функция для получения онлайн статуса пользователей в чатах
+export interface UserOnlineStatus {
+  userId: string
+  chatId: string
+  isOnline: boolean
+  lastSeen?: string
+}
+
+export interface UsersOnlineStatusResponse {
+  ok: true
+  users: UserOnlineStatus[]
+}
+
+export async function fetchUsersOnlineStatus(initData: string, chatIds: string[]): Promise<UsersOnlineStatusResponse> {
+  const base = requireEnvUrl('API_URL')
+  const url = new URL('messages/users-online-status', base)
+  url.searchParams.set('initData', initData)
+  url.searchParams.set('chatIds', chatIds.join(','))
+  const resp = await fetch(url.toString())
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const data = await resp.json()
+  if (!data || !data.ok) throw new Error('Bad response')
+  return data as UsersOnlineStatusResponse
+}
+
+export interface MarkAllMessagesReadResponse {
+  ok: true
+  unreadCount: number
+}
+
+export async function markAllMessagesRead(initData: string, chatId: string): Promise<MarkAllMessagesReadResponse> {
+  const base = requireEnvUrl('API_URL')
+  const url = new URL('messages/mark-all-read', base)
+  url.searchParams.set('initData', initData)
+  url.searchParams.set('chatId', chatId)
+  const resp = await fetch(url.toString(), { method: 'POST' })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const data = await resp.json()
+  if (!data || !data.ok) throw new Error('Bad response')
+  return data as MarkAllMessagesReadResponse
 }
 
 export async function markMessagesAsRead(initData: string, chatId: string): Promise<{ ok: true }> {

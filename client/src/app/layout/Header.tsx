@@ -1,12 +1,23 @@
 import type { JSX } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 
 export default function Header({ title = 'Okeano' }: { title?: string }): JSX.Element {
   const navigate = useNavigate()
+  const [isRippling, setIsRippling] = useState(false)
   
   const handleClick = () => {
     if (title === 'Okeano') {
+      // Запускаем ripple эффект
+      setIsRippling(true)
+      
+      // Переходим на страницу
       navigate('/about-position')
+      
+      // Сбрасываем состояние после завершения анимации
+      setTimeout(() => {
+        setIsRippling(false)
+      }, 600)
     }
   }
   
@@ -21,7 +32,7 @@ export default function Header({ title = 'Okeano' }: { title?: string }): JSX.El
       }}
     >
       <div 
-        className="relative inline-block cursor-pointer p-[10px] rounded-lg hover:bg-[color-mix(in_oklab,var(--color-bg)95%,var(--color-accent)5%)] transition-colors"
+        className={`relative inline-block cursor-pointer p-[10px] rounded-lg hover:bg-[color-mix(in_oklab,var(--color-bg)95%,var(--color-accent)5%)] transition-colors ${isRippling ? 'ripple-effect' : ''}`}
         onClick={handleClick}
       >
         <h1 className="text-xl font-bold text-[var(--color-fg)] inline-block relative">

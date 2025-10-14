@@ -1,9 +1,6 @@
 import type { JSX } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 
-import DesktopMessagesLayout from '@/app/layout/DesktopMessagesLayout'
-import ThemeListPage from '@/pages/Theme/ui/ThemeListPage'
-import ThemePage from '@/pages/Theme/ui/ThemePage'
 import ExplorePage from '@/pages/Explore/ui/ExplorePage'
 import LikesPage from '@/pages/Likes/ui/LikesPage'
 import LikesHistoryPage from '@/pages/LikesHistory'
@@ -19,13 +16,13 @@ import RecommendationsPage from '@/pages/Recommendations'
 import NotificationsPage from '@/pages/Notifications'
 import AboutPositionPage from '@/pages/AboutPosition'
 import { AdminPage, ModerationPage, UsersPage } from '@/pages/Admin'
+import ChatListPage from '@/pages/Chat/ui/ChatListPage'
 
 export function MobileRoutes(): JSX.Element {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/theme" replace />} />
-      <Route path="/theme" element={<ThemeListPage />} />
-      <Route path="/theme/:chatId" element={<ThemePage />} />
+      <Route path="/" element={<Navigate to="/explore" replace />} />
+      <Route path="/chat" element={<ChatListPage />} />
       <Route path="/likes" element={<LikesPage />} />
       <Route path="/likes-history" element={<LikesHistoryPage />} />
       <Route path="/explore" element={<ExplorePage />} />
@@ -44,7 +41,7 @@ export function MobileRoutes(): JSX.Element {
       <Route path="/admin/moderation" element={<ModerationPage />} />
       <Route path="/admin/users" element={<UsersPage />} />
       
-      <Route path="*" element={<Navigate to="/theme" replace />} />
+      <Route path="*" element={<Navigate to="/explore" replace />} />
     </Routes>
   )
 }
@@ -52,9 +49,8 @@ export function MobileRoutes(): JSX.Element {
 export function DesktopRoutes(): JSX.Element {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/theme" replace />} />
-      <Route path="/theme" element={<DesktopMessagesLayout />} />
-      <Route path="/theme/:chatId" element={<DesktopMessagesLayout />} />
+      <Route path="/" element={<Navigate to="/explore" replace />} />
+      <Route path="/chat" element={<ChatListPage />} />
       <Route path="/likes" element={<LikesPage />} />
       <Route path="/likes-history" element={<LikesHistoryPage />} />
       <Route path="/explore" element={<ExplorePage />} />
@@ -73,7 +69,7 @@ export function DesktopRoutes(): JSX.Element {
       <Route path="/admin/moderation" element={<ModerationPage />} />
       <Route path="/admin/users" element={<UsersPage />} />
       
-      <Route path="*" element={<Navigate to="/theme" replace />} />
+      <Route path="*" element={<Navigate to="/explore" replace />} />
     </Routes>
   )
 }
