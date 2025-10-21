@@ -12,6 +12,8 @@ const ChatListItemSchema = z.object({
   }),
   unreadCount: z.number().default(0),
   isRead: z.boolean().default(true),
+  isOnline: z.boolean().optional(),
+  lastSeen: z.string().optional(),
 })
 
 const ChatListResponseSchema = z.object({
@@ -109,6 +111,49 @@ class ChatStore {
     
     const updatedItems = [...this.state.items]
     updatedItems[itemIndex] = { ...updatedItems[itemIndex], ...updates } as ChatListItem
+    
+    this.state = {
+      ...this.state,
+      items: updatedItems,
+      lastFetched: Date.now(),
+    }
+    saveToStorage(this.state)
+    this.listeners.forEach(l => { try { l(this.state) } catch {} })
+  }
+
+  prependItem(item: ChatListItem): void {
+    const existingIds = new Set(this.state.items.map(item => item.id))
+    if (existingIds.has(item.id)) return
+    
+    this.state = {
+      ...this.state,
+      items: [item, ...this.state.items],
+      lastFetched: Date.now(),
+    }
+    saveToStorage(this.state)
+    this.listeners.forEach(l => { try { l(this.state) } catch {} })
+  }
+
+  removeItem(chatId: string): void {
+    this.state = {
+      ...this.state,
+      items: this.state.items.filter(item => item.id !== chatId),
+      lastFetched: Date.now(),
+    }
+    saveToStorage(this.state)
+    this.listeners.forEach(l => { try { l(this.state) } catch {} })
+  }
+
+  updateItem(item: ChatListItem): void {
+    const itemIndex = this.state.items.findIndex(existingItem => existingItem.id === item.id)
+    if (itemIndex === -1) {
+      // Если элемент не найден, добавляем его в начало
+      this.prependItem(item)
+      return
+    }
+    
+    const updatedItems = [...this.state.items]
+    updatedItems[itemIndex] = item
     
     this.state = {
       ...this.state,

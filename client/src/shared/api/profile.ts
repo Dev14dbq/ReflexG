@@ -281,7 +281,7 @@ export type UpdateAvatarResponse = z.infer<typeof UpdateAvatarResponse>
 
 export async function updateAvatar(payload: UpdateAvatarRequest): Promise<{ ok: boolean; photoUrl?: string; message?: string }> {
   const base = requireEnvUrl('API_URL')
-  const url = joinUrl(base, 'profile/avatar')
+  const url = joinUrl(base, 'profile/avatar/update')
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -360,6 +360,27 @@ export async function getMyProfile(initData: string): Promise<MyProfileResponse>
       if (parsed.success) return parsed.data
     } catch {}
   }
+  // Fallback for non-Telegram environments: build minimal profile from initDataUnsafe
+  try {
+    const tgUser = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user
+    if (tgUser && typeof tgUser.id !== 'undefined') {
+      const fallback: MyProfileResponse = {
+        ok: true,
+        profile: {
+          displayName: tgUser.first_name ?? null,
+          city: null,
+          bio: null,
+          gender: null as any,
+          heightCm: null,
+          weightKg: null,
+          wandSizeCm: null,
+          photos: [],
+          moderation: { base: null, description: null }
+        }
+      }
+      return fallback
+    }
+  } catch {}
   return { ok: false, message: 'Failed to fetch /profile/my' }
 }
 

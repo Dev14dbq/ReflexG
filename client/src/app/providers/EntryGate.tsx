@@ -31,11 +31,23 @@ export default function EntryGate({ children }: PropsWithChildren): JSX.Element 
     return
   }, [ready, minWaitDone, error, visible, exiting])
 
-  const message = error ? (typeof error === 'string' ? error : 'Не удалось выполнить инициализацию') : ''
-  const hint = error
-    ? (/401|unauthorized|invalid/i.test(message)
+  // Функция для извлечения содержимого из <span class="code-label"> тегов
+  const extractCodeLabelContent = (errorMessage: string): string | null => {
+    const match = errorMessage.match(/<span class="code-label">([^<]*)<\/span>/i)
+    return match ? match[1]?.trim() || null : null
+  }
+
+  const rawMessage = error ? (typeof error === 'string' ? error : 'Не удалось выполнить инициализацию') : ''
+  const codeLabelContent = extractCodeLabelContent(rawMessage)
+  
+  // Если найдено содержимое в code-label, показываем только его, иначе скрываем ошибку
+  const message = codeLabelContent || (codeLabelContent === null ? rawMessage : '')
+  const shouldShowError = codeLabelContent !== null || !rawMessage.includes('<span class="code-label">')
+  
+  const hint = error && shouldShowError
+    ? (/401|unauthorized|invalid/i.test(rawMessage)
         ? 'Данные сессии устарели. Перезагрузите WebApp.'
-        : /502|503|timeout|fetch/i.test(message)
+        : /502|503|timeout|fetch/i.test(rawMessage)
           ? 'Технические неполадки. Попробуйте позже.'
           : undefined)
     : undefined
@@ -45,7 +57,7 @@ export default function EntryGate({ children }: PropsWithChildren): JSX.Element 
       {children}
       {visible ? (
         <div className={`entry-gate ${exiting ? 'exit' : ''}`} style={{ pointerEvents: exiting ? 'none' : 'auto' }}>
-          {!error ? (
+          {!error || !shouldShowError ? (
             <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
               <div className="loader-ellipsis"><span className="dots"><span>.</span><span>.</span><span>.</span></span></div>
             </div>

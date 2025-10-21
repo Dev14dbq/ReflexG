@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { 
-  RiChat3Line, 
+  RiMessage3Line,
   RiHeart2Line, 
   RiSearchLine, 
   RiUser3Line, 
@@ -20,8 +20,8 @@ export default function DesktopSidebar({ collapsed, onToggle }: DesktopSidebarPr
 
   const navItems = [
     {
-      path: '/theme',
-      icon: RiChat3Line,
+      path: '/chat',
+      icon: RiMessage3Line,
       label: 'Сообщения',
       badge: null
     },
@@ -125,8 +125,7 @@ export default function DesktopSidebar({ collapsed, onToggle }: DesktopSidebarPr
         {/* Основная навигация */}
         <nav className={`flex-1 space-y-1 ${collapsed ? 'p-2' : 'p-4'}`}>
           {navItems.map((item) => {
-            const isActive = location.pathname === item.path || 
-              (item.path === '/theme' && location.pathname.startsWith('/theme/'))
+            const isActive = location.pathname === item.path
             return (
               <div key={item.path} className="relative">
                 {renderNavItem(item, isActive)}

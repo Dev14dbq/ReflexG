@@ -6,10 +6,14 @@ function normalizeUrl(v: unknown): string | undefined {
 
 const api = normalizeUrl(import.meta.env.VITE_API) ?? normalizeUrl(import.meta.env.VITE_API_URL)
 const cdn = normalizeUrl(import.meta.env.VITE_CDN)
+const cfImagesHash = normalizeUrl(import.meta.env.VITE_CF_IMAGES_HASH)
+const cfImagesVariant = normalizeUrl(import.meta.env.VITE_CF_IMAGES_VARIANT)
 
 export const ENV = {
   API_URL: api,
   CDN_URL: cdn,
+  CF_IMAGES_HASH: cfImagesHash,
+  CF_IMAGES_VARIANT: cfImagesVariant,
 } as const
 
 export function requireEnvUrl(name: keyof typeof ENV): string {

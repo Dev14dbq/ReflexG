@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { verifyTelegramInitData } from '@/lib/auth/verifyTelegramInitData'
 import { ENV } from '@/config/env'
 import type { Prisma } from '../../generated/prisma'
-import { deleteCdnFileByFilename } from '@/routes/cdn'
+// Legacy CDN helpers removed; we now store Cloudflare image IDs only
 
 const router = express.Router()
 
@@ -113,7 +113,50 @@ function calcAge(date: Date): number {
 
 // Функция для проверки, является ли URL кастомным аватаром
 function isCustomAvatar(url: string): boolean {
-  return url.includes('spectrmod.ru')
+  try {
+    const u = new URL(url)
+    const host = u.hostname.toLowerCase()
+    // Allow Cloudflare Images delivery domain
+    if (host.endsWith('imagedelivery.net')) {
+      const hash = (ENV as any)?.CF_IMAGES_HASH?.trim()
+      // If hash is configured, ensure path starts with it; otherwise accept any CF Images
+      if (hash && typeof hash === 'string' && hash.length > 0) {
+        return u.pathname.startsWith(`/${hash}/`)
+      }
+      return true
+    }
+    // Allow our primary domains
+    if (host.endsWith('spectrmod.ru') || host.endsWith('spectrmod.com')) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
+// ===== Cloudflare Images helpers =====
+function extractCloudflareImageId(input: string): string {
+  try {
+    // Accept plain id (uuid-like or hex with dashes)
+    if (/^[a-f0-9\-]{10,}$/i.test(input) && !/^https?:/i.test(input)) return input
+    const u = new URL(input)
+    if (u.hostname.endsWith('imagedelivery.net')) {
+      const parts = u.pathname.split('/').filter(Boolean)
+      // /<hash>/<id>/<variant>
+      if (parts.length >= 2) return parts[1]
+    }
+  } catch {}
+  return input
+}
+
+function buildCloudflareDeliveryUrl(idOrUrl: string, variant: string): string {
+  try {
+    if (/^https?:/i.test(idOrUrl)) return idOrUrl
+    const hash = (ENV as any)?.CF_IMAGES_HASH || ''
+    if (!hash) return idOrUrl
+    return `https://imagedelivery.net/${hash}/${idOrUrl}/${variant}`
+  } catch {
+    return idOrUrl
+  }
 }
 
 // Функция для проверки актуальности аватара из Telegram
@@ -194,7 +237,9 @@ router.get('/profile/my', async (req: express.Request, res: express.Response) =>
 
     if (!user) return res.status(404).json({ message: 'User not found' })
 
-    const photos = (user.photos || []).sort((a, b) => a.position - b.position).map(p => p.url)
+    const photos = (user.photos || [])
+      .sort((a, b) => a.position - b.position)
+      .map(p => buildCloudflareDeliveryUrl(p.url, 'profile'))
 
     return res.json({
       ok: true,
@@ -213,6 +258,124 @@ router.get('/profile/my', async (req: express.Request, res: express.Response) =>
         }
       }
     })
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error(e)
+    return res.status(500).json({ message: 'Internal error' })
+  }
+})
+
+// ===== Public profile view =====
+function calcAgeSafe(birthDate: Date | null | undefined): number | null {
+  if (!birthDate) return null
+  const now = new Date()
+  let age = now.getFullYear() - birthDate.getFullYear()
+  const m = now.getMonth() - birthDate.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < birthDate.getDate())) age--
+  return Math.max(0, age)
+}
+
+async function buildPublicProfile(userId: bigint) {
+  const user = await prisma.user.findUnique({
+    where: { telegramId: userId },
+    select: {
+      telegramId: true,
+      firstName: true,
+      lastName: true,
+      profile: {
+        select: {
+          displayName: true,
+          city: true,
+          birthDate: true,
+          gender: true,
+          description: true,
+          heightCm: true,
+          weightKg: true,
+          wandSizeCm: true,
+        }
+      },
+      photos: {
+        orderBy: { position: 'asc' },
+        select: { url: true, position: true, status: true }
+      }
+    }
+  })
+  if (!user) return null
+
+  const photos = (user.photos || [])
+    .filter(p => p.status !== 'REJECTED')
+    .sort((a, b) => a.position - b.position)
+    .map(p => buildCloudflareDeliveryUrl(p.url, 'profile'))
+
+  return {
+    userId: user.telegramId.toString(),
+    displayName: user.profile?.displayName ?? (user.firstName || null),
+    age: calcAgeSafe(user.profile?.birthDate) as number | null,
+    city: user.profile?.city ?? null,
+    photos,
+    bio: user.profile?.description ?? null,
+    heightCm: user.profile?.heightCm ?? null,
+    weightKg: user.profile?.weightKg ?? null,
+    wandSizeCm: user.profile?.wandSizeCm ?? null,
+    gender: (user.profile?.gender as any) ?? null,
+  }
+}
+
+const ViewProfileQuery = z.object({
+  initData: z.string().min(1),
+  userId: z.coerce.bigint(),
+})
+
+router.get('/profile/view', async (req: express.Request, res: express.Response) => {
+  const parsed = ViewProfileQuery.safeParse({ initData: req.query.initData, userId: req.query.userId })
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid query' })
+
+  const token = ENV.TELEGRAM_BOT_TOKEN
+  if (!token) return res.status(500).json({ message: 'Server misconfigured: TELEGRAM_BOT_TOKEN is not set' })
+
+  const verification = verifyTelegramInitData(parsed.data.initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
+  if (!verification.ok || !verification.user) return res.status(401).json({ message: 'Unauthorized' })
+
+  try {
+    const profile = await buildPublicProfile(parsed.data.userId)
+    if (!profile) return res.status(404).json({ message: 'User not found' })
+    return res.json({ ok: true, profile })
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error(e)
+    return res.status(500).json({ message: 'Internal error' })
+  }
+})
+
+const ViewProfileByChatQuery = z.object({
+  initData: z.string().min(1),
+  chatId: z.string().min(1),
+})
+
+router.get('/profile/view-by-chat', async (req: express.Request, res: express.Response) => {
+  const parsed = ViewProfileByChatQuery.safeParse({ initData: req.query.initData, chatId: req.query.chatId })
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid query' })
+
+  const token = ENV.TELEGRAM_BOT_TOKEN
+  if (!token) return res.status(500).json({ message: 'Server misconfigured: TELEGRAM_BOT_TOKEN is not set' })
+
+  const verification = verifyTelegramInitData(parsed.data.initData, token, ENV.TELEGRAM_AUTH_TTL_SECONDS)
+  if (!verification.ok || !verification.user) return res.status(401).json({ message: 'Unauthorized' })
+
+  try {
+    const meId = BigInt(verification.user.id)
+    const member = await prisma.chatMember.findUnique({ where: { chatId_userId: { chatId: parsed.data.chatId, userId: meId } } })
+    if (!member) return res.status(403).json({ message: 'Forbidden' })
+
+    const other = await prisma.chatMember.findFirst({
+      where: { chatId: parsed.data.chatId, userId: { not: meId } },
+      select: { userId: true }
+    })
+    if (!other) return res.status(404).json({ message: 'Other member not found' })
+
+    const profile = await buildPublicProfile(other.userId)
+    if (!profile) return res.status(404).json({ message: 'User not found' })
+    return res.json({ ok: true, profile })
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error(e)
@@ -374,10 +537,16 @@ router.post('/profile/submit-base', async (req: express.Request, res: express.Re
         }
       })
 
-      // Сбросим старые фото и создадим новые 3 слота
-      await tx.photo.deleteMany({ where: { userId: user.telegramId } })
+      // Сбросим и перезапишем 3 слота фотографий профиля
+      await tx.photo.deleteMany({ where: { userId: user.telegramId, position: { gte: 0, lte: 2 } } })
       await tx.photo.createMany({
-        data: photos.map((p, i) => ({ userId: user.telegramId, url: p.url, position: i, status: 'PENDING' })),
+        data: photos.slice(0, 3).map((p, i) => ({
+          userId: user.telegramId,
+          // Store only Cloudflare Image ID (normalized)
+          url: extractCloudflareImageId(p.url),
+          position: i,
+          status: 'PENDING'
+        })),
         skipDuplicates: true,
       })
 
@@ -506,21 +675,34 @@ router.post('/profile/submit-details', async (req: express.Request, res: express
         }
       })
 
-      // Создаём элемент модерации типа PROFILE_DESCRIPTION с payload
-      await tx.moderationItem.create({
-        data: {
-          userId,
-          type: 'PROFILE_DESCRIPTION',
-          status: 'PENDING',
-          payload: {
-            description,
-            lookingFor: Array.isArray(lookingFor) ? lookingFor : [],
-            heightCm: heightCm ?? null,
-            weightKg: weightKg ?? null,
-            wandSizeCm: wandSizeCm ?? null,
-          }
-        }
+      const payload = {
+        description,
+        lookingFor: Array.isArray(lookingFor) ? lookingFor : [],
+        heightCm: heightCm ?? null,
+        weightKg: weightKg ?? null,
+        wandSizeCm: wandSizeCm ?? null,
+      }
+
+      // Идемпотентность: если уже есть PENDING PROFILE_DESCRIPTION — обновляем его, иначе создаём
+      const existing = await tx.moderationItem.findFirst({
+        where: { userId, type: 'PROFILE_DESCRIPTION', status: 'PENDING' },
+        orderBy: { createdAt: 'desc' }
       })
+
+      if (existing) {
+        const prev = (existing.payload as Record<string, unknown>) || {}
+        const merged = { ...prev, ...payload }
+        await tx.moderationItem.update({ where: { id: existing.id }, data: { payload: merged as Prisma.InputJsonValue } })
+      } else {
+        await tx.moderationItem.create({
+          data: {
+            userId,
+            type: 'PROFILE_DESCRIPTION',
+            status: 'PENDING',
+            payload: payload as Prisma.InputJsonValue,
+          }
+        })
+      }
     })
 
     return res.json({ ok: true, status: 'UNDER_REVIEW_DESC' })
@@ -562,13 +744,7 @@ router.post('/admin/profile/base/moderate', async (req: express.Request, res: ex
       await tx.photo.deleteMany({ where: { userId } })
       await tx.profile.deleteMany({ where: { userId } })
       // вне транзакции удалим физические файлы (по возможности)
-      for (const p of photos) {
-        try {
-          const url = p.url || ''
-          const filename = url.split('/').pop() || ''
-          deleteCdnFileByFilename(filename)
-        } catch {}
-      }
+      // Local CDN cleanup removed; photos are Cloudflare-managed
       return
     }
 
@@ -627,9 +803,9 @@ router.post('/profile/avatar/update', async (req: express.Request, res: express.
   try {
     const telegramId = BigInt(verification.user.id)
 
-    // Проверяем, что URL содержит spectrmod.ru (кастомный аватар)
+    // Проверяем, что URL относится к разрешённым доменам (Cloudflare Images или наш домен)
     if (!isCustomAvatar(photoUrl)) {
-      return res.status(400).json({ message: 'Only custom avatars from spectrmod.ru are allowed' })
+      return res.status(400).json({ message: 'Only custom avatars from allowed domains (Cloudflare Images or spectrmod.*) are allowed' })
     }
 
     await prisma.user.update({

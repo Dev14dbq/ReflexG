@@ -20,7 +20,8 @@ export default defineConfig({
     allowedHosts: [
       'dev.spectrmod.ru',
       'new.spectrmod.ru',
-      'spectrmod.ru'
+      'spectrmod.ru',
+      '.spectrmod.com' // позволяет все поддомены spectrmod.com
     ]
   }
 })

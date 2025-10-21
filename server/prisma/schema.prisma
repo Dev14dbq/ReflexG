@@ -37,6 +37,7 @@ model User {
   reportsSent     Report[]         @relation("ReportReporter")
   reportsReceived Report[]         @relation("ReportTarget")
   reportsModerated Report[]        @relation("ReportModerator")
+  stickerPacks    UserStickerPack[]
 }
 
 model Profile {
@@ -141,6 +142,8 @@ model Message {
   senderId    BigInt
   text        String?
   photoUrl    String?
+  stickerId   String?
+  messageType MessageType         @default(TEXT)
   replyId     String?
   isPinned    Boolean?            @default(false)
   isEdit      Boolean?            @default(false)
@@ -148,6 +151,7 @@ model Message {
   deletedAt   DateTime?
   chat        Chat                @relation(fields: [chatId], references: [id], onDelete: Cascade)
   sender      User                @relation(fields: [senderId], references: [telegramId], onDelete: Cascade)
+  sticker     Sticker?            @relation(fields: [stickerId], references: [id])
   attachments MessageAttachment[]
   reports     Report[]
 
@@ -293,4 +297,51 @@ enum ReportStatus {
   APPROVED
   REJECTED
   INVESTIGATING
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  STICKER
+}
+
+model StickerPack {
+  id          String    @id @default(cuid())
+  name        String    @db.VarChar(64)
+  description String?   @db.VarChar(256)
+  thumbnail   String?   // Cloudflare Images id
+  isOfficial  Boolean   @default(false)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  stickers    Sticker[]
+  users       UserStickerPack[]
+
+  @@index([isActive, isOfficial])
+}
+
+model Sticker {
+  id          String      @id @default(cuid())
+  packId      String
+  name        String?     @db.VarChar(64)
+  imageUrl    String      // Cloudflare Images id
+  emoji       String?     @db.VarChar(8) // emoji для быстрого поиска
+  position    Int         // порядок в паке
+  createdAt   DateTime    @default(now())
+  pack        StickerPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  messages    Message[]
+
+  @@unique([packId, position])
+  @@index([packId])
+}
+
+model UserStickerPack {
+  userId    BigInt
+  packId    String
+  addedAt   DateTime @default(now())
+  user      User       @relation(fields: [userId], references: [telegramId], onDelete: Cascade)
+  pack      StickerPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@id([userId, packId])
+  @@index([userId])
 }

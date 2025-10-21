@@ -42,7 +42,7 @@ export function createBot(): Bot | null {
       console.error('Failed to check user role for bot:', error)
     }
 
-    const imgUrl = 'https://cdn.spectrmod.ru/Reflex.png'
+    const imgUrl = 'https://imagedelivery.net/tiG5wLsWR2QYY4sb4--BKw/f2aa1a15-74ba-45d0-52cd-7f8b5f130b00/avatar'
     try {
       await ctx.replyWithPhoto(imgUrl, { caption: text, reply_markup: kb, parse_mode: 'HTML' })
     } catch {

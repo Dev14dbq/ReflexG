@@ -149,6 +149,37 @@ button:focus-visible {
 /* Gap utilities */
 .gap-2 { gap: 0.5rem; }
 
+/* Ripple effect animation */
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+.ripple-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple-effect::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--color-accent) 30%, transparent);
+  transform: translate(-50%, -50%);
+  animation: ripple 0.6s ease-out;
+  pointer-events: none;
+}
+
 /* Margin utilities */
 .ml-1 { margin-left: 0.25rem; }
 .mb-2 { margin-bottom: 0.5rem; }

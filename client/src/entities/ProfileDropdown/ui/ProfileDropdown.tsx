@@ -126,7 +126,7 @@ export default function ProfileDropdown({ isOpen, onClose, triggerRef, onAvatarC
         setUploading(false)
         return
       }
-      const resp = await uploadImage(file)
+      const resp = await uploadImage(file, { variant: 'avatar' })
       if (!resp.ok) {
         setError(resp.message || 'Не удалось загрузить изображение')
         setUploading(false)
