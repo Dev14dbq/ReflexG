@@ -3,11 +3,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import DaDataCityAutocomplete, { type DaDataCityItem } from '@/shared/ui/DaDataCityAutocomplete'
-import { PhotoPreviewModal } from './PhotoPreviewModal'
 import { useTelegramAuth } from '@/app/providers/TelegramAuthProvider'
 import { GenderEnum, SexEnum, submitBaseProfile } from '@/shared/api/profile'
 import { uploadImage } from '@/shared/api/cdn'
-import { compressImageToJpeg, cropImageTo9x16 } from '@/shared/lib/image'
+import { cfImage } from '@/shared/lib/image'
 import Header from '@/app/layout/Header'
 import { GENDER_FLAG } from '@/shared/lib/gender'
 
@@ -39,6 +38,7 @@ export default function OnboardingPage(): JSX.Element {
   const { ready, isWebApp } = useTelegramAuth()
   const [step, setStep] = useState<Step>('NAME')
   const [isTransitioning, setIsTransitioning] = useState(false)
+  const [dots, setDots] = useState<string>('.')
 
   // Функция для плавного перехода между шагами
   const transitionToStep = (newStep: Step) => {
@@ -104,36 +104,24 @@ export default function OnboardingPage(): JSX.Element {
       return ['', '', '']
     } catch { return ['', '', ''] }
   })
+  // Отложенная загрузка: храним локальные файлы до нажатия "Отправить"
+  const [photoFiles, setPhotoFiles] = useState<(File | Blob | null)[]>([null, null, null])
   const [photoUploading, setPhotoUploading] = useState<boolean[]>([false, false, false])
-  const [photoPreview, setPhotoPreview] = useState<{file: File, index: number} | null>(null)
+  // Модалка подтверждения больше не используется; загружаем по нажатию "Отправить"
   const [error, setError] = useState<string | null>(null)
 
-  // Функции для подтверждения загрузки фото
-  const confirmPhotoUpload = async () => {
-    if (!photoPreview) return
-    
-    const { file, index } = photoPreview
+  // Обработка выбора файла: создаём превью, откладываем файл до submit
+  function handleFilePicked(index: number, file: File): void {
     setPhotoUploading(prev => prev.map((v, idx) => idx === index ? true : v))
-    setPhotoPreview(null)
-    
     try {
-      // Обрезаем фото под формат 9:16 и уменьшаем до HD
-      const processedImage = await cropImageTo9x16(file, 0.9)
-      const up = await uploadImage(processedImage)
-      if (!up.ok) throw new Error(up.message || 'Не удалось загрузить')
-      setPhotoUrls(prev => {
-        if (prev.includes(up.url)) { toast.error('Это фото уже добавлено'); return prev }
-        return prev.map((v, idx) => idx === index ? up.url : v)
-      })
+      const previewUrl = URL.createObjectURL(file)
+      setPhotoUrls(prev => prev.map((v, idx) => idx === index ? previewUrl : v))
+      setPhotoFiles(prev => prev.map((v, idx) => idx === index ? file : v))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Ошибка загрузки')
+      toast.error('Не удалось подготовить изображение')
     } finally {
       setPhotoUploading(prev => prev.map((v, idx) => idx === index ? false : v))
     }
-  }
-
-  const cancelPhotoUpload = () => {
-    setPhotoPreview(null)
   }
 
   // авто-установка пола для уже определенных ориентаций (кроме Гей/Лесби)
@@ -218,6 +206,16 @@ export default function OnboardingPage(): JSX.Element {
   useEffect(() => { try { localStorage.setItem('onb.sex', sex ?? '') } catch {} }, [sex])
   useEffect(() => { try { localStorage.setItem('onb.photos', JSON.stringify(photoUrls)) } catch {} }, [photoUrls])
 
+  // Анимация троеточия для шага SUBMITTING
+  useEffect(() => {
+    if (step !== 'SUBMITTING') return
+    setDots('.')
+    const id = window.setInterval(() => {
+      setDots(prev => (prev.length >= 3 ? '.' : prev + '.'))
+    }, 400)
+    return () => window.clearInterval(id)
+  }, [step])
+
   function onBirthDateInput(e: ChangeEvent<HTMLInputElement>): void {
     let v = e.target.value.replace(/[^\d]/g, '')
     if (v.length > 8) v = v.slice(0, 8)
@@ -301,6 +299,21 @@ export default function OnboardingPage(): JSX.Element {
     setStep('SUBMITTING')
     try {
       const initData = window?.Telegram?.WebApp?.initData || ''
+      // 1) Перед отправкой анкеты загружаем отложенные фото
+      const finalUrls = [...photoUrls]
+      for (let i = 0; i < finalUrls.length; i++) {
+        const current = finalUrls[i] || ''
+        const isLocal = typeof current === 'string' && current.startsWith('blob:')
+        const file = photoFiles[i] || null
+        if (isLocal && file) {
+          const up = await uploadImage(file, { variant: 'profile' })
+          if (!up.ok) throw new Error(up.message || 'Не удалось загрузить фото')
+          // Освобождаем blob URL и подменяем финальной ссылкой
+          try { URL.revokeObjectURL(current) } catch {}
+          finalUrls[i] = up.url
+        }
+      }
+      setPhotoUrls(finalUrls)
       const payload = {
         initData,
         city: city.trim(),
@@ -308,7 +321,7 @@ export default function OnboardingPage(): JSX.Element {
         birthDate,
         gender: gender!,
         sex: isGenderRequiresSex(gender!) ? sex : null,
-        photos: photoUrls.map(url => ({ url })),
+        photos: finalUrls.map(url => ({ url })),
       }
       const resp = await submitBaseProfile(payload as any)
       if (!resp.ok) throw new Error(resp.message || 'Ошибка отправки')
@@ -342,8 +355,9 @@ export default function OnboardingPage(): JSX.Element {
 
   function openTelegramChannel(url: string): void {
     try {
-      if (window?.Telegram?.WebApp?.openTelegramLink) {
-        window.Telegram.WebApp.openTelegramLink(url)
+      const tg: any = (window as any)?.Telegram?.WebApp
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(url)
         return
       }
     } catch {}
@@ -352,7 +366,7 @@ export default function OnboardingPage(): JSX.Element {
 
   // Новый layout — центральное поле + фиксированная нижняя панель с кнопками
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ paddingTop: '100px' }}>
       <Header title="Okeano" />
       <div className="pt-4">
         {isFlowStep ? (
@@ -363,12 +377,21 @@ export default function OnboardingPage(): JSX.Element {
           </div>
         ) : null}
       </div>
-      <div className={`mt-3 text-center text-2xl font-semibold transition-all duration-150 ease-in-out ${isTransitioning ? 'opacity-0 transform translate-x-4' : 'opacity-100 transform translate-x-0'}`}>{title}</div>
+      {isFlowStep ? (
+        <div className={`mt-3 text-center text-2xl font-semibold transition-all duration-150 ease-in-out ${isTransitioning ? 'opacity-0 transform translate-x-4' : 'opacity-100 transform translate-x-0'}`}>{title}</div>
+      ) : null}
       <div className="flex-1 flex items-center justify-center px-4">
         <div className={`w-full max-w-md transition-all duration-150 ease-in-out ${isTransitioning ? 'opacity-0 transform translate-x-4' : 'opacity-100 transform translate-x-0'}`}>
           {error ? <div className="mb-3 text-red-500 text-sm text-center">{error}</div> : null}
 
-
+          {step === 'SUBMITTING' ? (
+            <div className="w-full flex items-center justify-center" style={{ marginTop: '-8vh' }}>
+              <div className="text-center">
+                <div className="text-2xl font-semibold">{`Отправка анкеты${dots}`}</div>
+              </div>
+            </div>
+          ) : (
+          <> 
           {step === 'NAME' ? (
             <div>
               <input className="input" placeholder="Введите имя..." value={displayName} onChange={e => setDisplayName(e.target.value)} />
@@ -482,14 +505,14 @@ export default function OnboardingPage(): JSX.Element {
                       onChange={e => {
                         const file = e.target.files?.[0]
                         if (!file) return
-                        setPhotoPreview({ file, index: i })
+                        handleFilePicked(i, file)
                       }}
                     />
                     <div className="h-32 w-24 rounded-lg border border-accent flex items-center justify-center overflow-hidden" style={{ background: 'color-mix(in oklab, var(--color-bg) 92%, var(--color-accent) 8%)' }}>
                       {photoUploading[i] ? (
                         <div className="text-xs text-muted">...</div>
                       ) : (photoUrls[i] ? (
-                        <img src={photoUrls[i]} alt={`Фото ${i + 1}`} className="h-full w-full object-cover" />
+                        <img src={cfImage(photoUrls[i], { width: 360, quality: 85, format: 'auto' })} alt={`Фото ${i + 1}`} className="h-full w-full object-cover" />
                       ) : (
                         <span className="text-2xl">+</span>
                       ))}
@@ -502,15 +525,12 @@ export default function OnboardingPage(): JSX.Element {
               </div>
             </div>
           ) : null}
+          </>
+          )}
         </div>
       </div>
 
-      {/* Модальное окно для подтверждения загрузки фото */}
-      <PhotoPreviewModal 
-        file={photoPreview?.file || null}
-        onConfirm={confirmPhotoUpload}
-        onCancel={cancelPhotoUpload}
-      />
+      {/* Модалка подтверждения убрана: фото подготавливаются сразу, отправляются при submit */}
 
       <div className="sticky bottom-0 left-0 right-0 px-4 pb-4 pt-2" style={{ background: 'var(--color-bg)' }}>
         {isFlowStep ? (

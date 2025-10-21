@@ -31,35 +31,67 @@ type Message = {
   senderId: string
   text?: string
   photoUrl?: string
+  stickerId?: string
+  messageType?: 'TEXT' | 'IMAGE' | 'STICKER'
+  replyId?: string
+  isPinned?: boolean
+  isEdit?: boolean
   createdAt: number
+}
+
+let chatSubscriptions: Map<string, Set<WsType>> = new Map()
+let clients: Map<WsType, Client> = new Map()
+
+export function broadcastMessage(chatId: string, payload: any): void {
+  console.log('[WS BROADCAST] Broadcasting message to chat:', chatId, payload)
+  
+  const subs = chatSubscriptions.get(chatId)
+  if (!subs || subs.size === 0) {
+    console.log('[WS BROADCAST] No subscribers for chat:', chatId)
+    return
+  }
+  
+  console.log('[WS BROADCAST] Broadcasting to', subs.size, 'subscribers')
+  
+  for (const ws of subs) {
+    const client = clients.get(ws)
+    if (!client) continue
+    
+    try {
+      ws.send(JSON.stringify({ ch: 'messages', t: 'message', data: payload }))
+      console.log('[WS BROADCAST] Sent to user:', client.userId.toString())
+    } catch (error) {
+      console.error('[WS BROADCAST] Failed to send to user:', client.userId.toString(), error)
+    }
+  }
 }
 
 export function attachWsServer(server: import('http').Server): void {
   const wss = new WebSocketServer({ noServer: true })
-  const clients = new Map<WsType, Client>()
+  clients = new Map<WsType, Client>()
   // Track online user connections count
   const onlineUsers = new Map<string, number>()
   // Track chat subscriptions: chatId -> Set of sockets
-  const chatSubscriptions = new Map<string, Set<WsType>>()
+  chatSubscriptions = new Map<string, Set<WsType>>()
 
   const incrementOnline = (userId: string) => {
     const current = onlineUsers.get(userId) || 0
     onlineUsers.set(userId, current + 1)
-    console.log(`[WS ONLINE] User ${userId} online count: ${current + 1}`)
+    // console.log(`[WS ONLINE] User ${userId} online count: ${current + 1}`)
   }
 
   const decrementOnline = (userId: string) => {
     const current = onlineUsers.get(userId) || 0
     if (current <= 1) {
       onlineUsers.delete(userId)
-      console.log(`[WS ONLINE] User ${userId} went offline (count was ${current})`)
+      // console.log(`[WS ONLINE] User ${userId} went offline (count was ${current})`)
     } else {
       onlineUsers.set(userId, current - 1)
-      console.log(`[WS ONLINE] User ${userId} online count: ${current - 1}`)
+      // console.log(`[WS ONLINE] User ${userId} online count: ${current - 1}`)
     }
   }
 
-  const isUserOnline = (userId: string): boolean => onlineUsers.has(userId)
+  const isUserOnline = (userId: string): boolean => (onlineUsers.get(userId) || 0) > 0
   
   // Функция для отправки уведомлений пользователям через бота
   async function sendModerationNotification(userId: bigint, action: string, reason?: string, isBanned = false) {
@@ -113,6 +145,35 @@ export function attachWsServer(server: import('http').Server): void {
     reason: z.string().optional(),
     banUser: z.boolean().optional()
   })
+
+  // ===== Helpers for Cloudflare Images =====
+  function extractCloudflareImageId(input: string): string {
+    try {
+      if (/^[a-f0-9\-]{10,}$/i.test(input) && !/^https?:/i.test(input)) return input
+      const u = new URL(input)
+      if (u.hostname.endsWith('imagedelivery.net') || u.hostname.endsWith('cdn.spectrmod.com')) {
+        const parts = u.pathname.split('/').filter(Boolean)
+        if (parts.length >= 2) return parts[1]
+      }
+    } catch {}
+    return input
+  }
+
+  async function deleteCloudflareImageById(id: string): Promise<void> {
+    try {
+      if (!ENV.CLOUDFLARE_API_TOKEN || !ENV.CLOUDFLARE_ACCOUNT_ID) return
+      const url = `https://api.cloudflare.com/client/v4/accounts/${ENV.CLOUDFLARE_ACCOUNT_ID}/images/v1/${encodeURIComponent(id)}`
+      await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${ENV.CLOUDFLARE_API_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      })
+    } catch (e) {
+      console.error('[WS MODERATION] Failed to delete Cloudflare image', id, e)
+    }
+  }
 
   async function buildChatInfo(viewerUserId: bigint, chatId: string) {
     // verify membership
@@ -190,7 +251,7 @@ export function attachWsServer(server: import('http').Server): void {
       
       // Для /ws/messages добавляем в online пользователей
       if (pathname === '/ws/messages') {
-        console.log(`[WS CONNECT] User ${userId} connected to messages WebSocket`)
+        // console.log(`[WS CONNECT] User ${userId} connected to messages WebSocket`)
         incrementOnline(String(userId))
         void broadcastPresenceForUser(String(userId), true)
       }
@@ -199,7 +260,7 @@ export function attachWsServer(server: import('http').Server): void {
         clients.delete(ws)
         // Для /ws/messages убираем из online пользователей
         if (pathname === '/ws/messages') {
-          console.log(`[WS DISCONNECT] User ${userId} disconnected from messages WebSocket`)
+        // console.log(`[WS DISCONNECT] User ${userId} disconnected from messages WebSocket`)
           decrementOnline(String(userId))
           void broadcastPresenceForUser(String(userId), false)
         }
@@ -436,7 +497,12 @@ export function attachWsServer(server: import('http').Server): void {
                 chatId,
                 senderId: String(message.senderId),
                 text: message.text,
+                photoUrl: message.photoUrl,
+                stickerId: message.stickerId,
+                messageType: message.messageType,
                 replyId: message.replyId,
+                isPinned: message.isPinned,
+                isEdit: message.isEdit,
                 createdAt: message.createdAt.toISOString(),
               }
               // ack to sender
@@ -447,6 +513,22 @@ export function attachWsServer(server: import('http').Server): void {
               for (const c of clients.values()) {
                 if (memberIds.has(String(c.userId))) {
                   c.ws.send(JSON.stringify({ ch: 'messages', t: 'message', data: payload }))
+                }
+              }
+              // broadcast to chats channel: update last message and unread counters
+              for (const c of clients.values()) {
+                if (memberIds.has(String(c.userId))) {
+                  const isPeer = String(c.userId) !== String(message.senderId)
+                  const unreadIncrement = isPeer ? 1 : 0
+                  c.ws.send(JSON.stringify({
+                    ch: 'chats',
+                    t: 'newMessage',
+                    data: {
+                      chatId,
+                      message: { id: message.id, senderId: String(message.senderId), text: message.text || '', createdAt: message.createdAt.toISOString() },
+                      unreadCountDelta: unreadIncrement
+                    }
+                  }))
                 }
               }
             } else if (msg.t === 'edit') {
@@ -499,7 +581,11 @@ export function attachWsServer(server: import('http').Server): void {
                 chatId: updatedMessage.chatId,
                 senderId: String(updatedMessage.senderId),
                 text: updatedMessage.text,
+                photoUrl: updatedMessage.photoUrl,
+                stickerId: updatedMessage.stickerId,
+                messageType: updatedMessage.messageType,
                 replyId: updatedMessage.replyId,
+                isPinned: updatedMessage.isPinned,
                 isEdit: updatedMessage.isEdit,
                 createdAt: updatedMessage.createdAt.toISOString(),
               }
@@ -611,8 +697,12 @@ export function attachWsServer(server: import('http').Server): void {
                 chatId: updatedMessage.chatId,
                 senderId: String(updatedMessage.senderId),
                 text: updatedMessage.text,
+                photoUrl: updatedMessage.photoUrl,
+                stickerId: updatedMessage.stickerId,
+                messageType: updatedMessage.messageType,
                 replyId: updatedMessage.replyId,
                 isPinned: updatedMessage.isPinned,
+                isEdit: updatedMessage.isEdit,
                 createdAt: updatedMessage.createdAt.toISOString(),
               }
               
@@ -680,7 +770,12 @@ export function attachWsServer(server: import('http').Server): void {
                 chatId: replyMessage.chatId,
                 senderId: String(replyMessage.senderId),
                 text: replyMessage.text,
+                photoUrl: replyMessage.photoUrl,
+                stickerId: replyMessage.stickerId,
+                messageType: replyMessage.messageType,
                 replyId: replyMessage.replyId,
+                isPinned: replyMessage.isPinned,
+                isEdit: replyMessage.isEdit,
                 createdAt: replyMessage.createdAt.toISOString(),
               }
               
@@ -1368,7 +1463,12 @@ export function attachWsServer(server: import('http').Server): void {
                     
                     if (item.type === 'PHOTOS') {
                       const payload = item.payload as any
-                      if (payload.photoId) {
+                      const list = Array.isArray(payload?.photos)
+                        ? payload.photos as Array<{ url: string; position?: number }>
+                        : []
+
+                      // Если старый формат (photoId)
+                      if (list.length === 0 && payload?.photoId) {
                         await prisma.photo.update({
                           where: { id: payload.photoId },
                           data: {
@@ -1377,6 +1477,37 @@ export function attachWsServer(server: import('http').Server): void {
                           }
                         })
                         console.log(`Photo approved for user ${item.userId}, photoId: ${payload.photoId}`)
+                      } else if (list.length > 0) {
+                        const normalizedNew = list
+                          .map((p, idx) => ({ id: extractCloudflareImageId(p.url), pos: Number.isFinite(p.position) ? p.position as number : idx }))
+                          .sort((a, b) => a.pos - b.pos)
+                          .map(p => p.id)
+
+                        const existing = await prisma.photo.findMany({ where: { userId: item.userId }, select: { url: true } })
+                        const existingIds = new Set(existing.map(p => p.url))
+                        const newIdsSet = new Set(normalizedNew)
+                        const toRemove = [...existingIds].filter(id => !newIdsSet.has(id))
+
+                        await prisma.$transaction(async (tx) => {
+                          await tx.photo.deleteMany({ where: { userId: item.userId } })
+                          if (normalizedNew.length > 0) {
+                            await tx.photo.createMany({
+                              data: normalizedNew.map((id, i) => ({
+                                userId: item.userId,
+                                url: id,
+                                position: i,
+                                status: 'APPROVED',
+                                note: null
+                              })),
+                              skipDuplicates: true,
+                            })
+                          }
+                        })
+
+                        for (const id of toRemove) {
+                          void deleteCloudflareImageById(id)
+                        }
+                        console.log(`[WS MODERATION] Photos replaced for user ${item.userId}; removed: ${toRemove.length}`)
                       }
                     }
                     

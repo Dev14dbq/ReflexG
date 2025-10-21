@@ -5,7 +5,6 @@ import { profileDetailsRouter } from '@/routes/profile.details'
 import { profileRouter } from '@/routes/profile'
 import { authRouter } from '@/routes/auth'
 import { ordersRouter } from '@/routes/orders'
-import { cdnRouter } from '@/routes/cdn'
 import { placesRouter } from '@/routes/places'
 import { messagesRouter } from '@/routes/messages'
 import { adminRouter } from '@/routes/admin'
@@ -14,6 +13,11 @@ import { likesRouter } from '@/routes/likes'
 import { checkUserBan } from '@/lib/middleware/banCheck'
 import { settingsChatRouter } from '@/routes/settings'
 import { privacyRouter } from '@/routes/privacy'
+import { cdnRouter } from '@/routes/cdn'
+import { getDatabaseStatus, checkDatabaseHealth } from '@/lib/healthCheck'
+import { startCloudflareImagesGc } from '@/lib/cfImagesGc'
+import { startDbBackupScheduler } from '@/lib/dbBackup'
+import { startAutoDeleteScheduler } from '@/lib/autoDeleteMessages'
 
 export function createApp(): express.Express {
   const app = express()
@@ -46,11 +50,34 @@ export function createApp(): express.Express {
     res.json({ pong: true, ts: Date.now(), pid: process.pid })
   })
 
+  // health check endpoint
+  app.get('/health', async (req, res) => {
+    try {
+      const dbStatus = getDatabaseStatus()
+      const liveCheck = await checkDatabaseHealth()
+      
+      res.json({
+        status: 'ok',
+        timestamp: Date.now(),
+        database: {
+          healthy: dbStatus.healthy,
+          lastCheck: dbStatus.lastCheck,
+          responseTime: liveCheck.responseTime
+        }
+      })
+    } catch (error) {
+      res.status(500).json({
+        status: 'error',
+        timestamp: Date.now(),
+        error: 'Health check failed'
+      })
+    }
+  })
+
   // mount routers at root and at /api
   app.use('/', authRouter)
   app.use('/', ordersRouter)
   app.use('/', profileRouter)
-  app.use('/', cdnRouter)
   app.use('/', placesRouter)
   app.use('/', profileDetailsRouter)
   app.use('/', messagesRouter)
@@ -58,13 +85,13 @@ export function createApp(): express.Express {
   app.use('/', settingsChatRouter)
   app.use('/', privacyRouter)
   app.use('/', likesRouter)
+  app.use('/', cdnRouter)
   app.use('/moderation', moderationRouter)
   
   // API роуты
   app.use('/api', authRouter)
   app.use('/api', ordersRouter)
   app.use('/api', profileRouter)
-  app.use('/api', cdnRouter)
   app.use('/api', placesRouter)
   app.use('/api', profileDetailsRouter)
   app.use('/api', messagesRouter)
@@ -72,6 +99,7 @@ export function createApp(): express.Express {
   app.use('/api', settingsChatRouter)
   app.use('/api', privacyRouter)
   app.use('/api', likesRouter)
+  app.use('/api', cdnRouter)
   app.use('/api/moderation', moderationRouter)
 
   // error handler
@@ -83,5 +111,10 @@ export function createApp(): express.Express {
 
   return app
 }
+
+// Start background jobs on module load (once per process)
+try { startCloudflareImagesGc() } catch (e) { /* noop */ }
+try { startDbBackupScheduler() } catch (e) { /* noop */ }
+try { startAutoDeleteScheduler() } catch (e) { /* noop */ }
 
 

@@ -5,9 +5,38 @@ import { prisma } from '@/lib/prisma'
 import { safeParseDate, isValidDate } from '@/lib/dateUtils'
 import { Bot } from 'grammy'
 import { ENV } from '@/config/env'
-import { deleteCdnFileByFilename } from '@/routes/cdn'
+// Legacy CDN deletion removed; Cloudflare deletions handled via CF API in cloudflare router
 
 const router = express.Router()
+
+// ===== Helpers for Cloudflare Images =====
+function extractCloudflareImageId(input: string): string {
+  try {
+    if (/^[a-f0-9\-]{10,}$/i.test(input) && !/^https?:/i.test(input)) return input
+    const u = new URL(input)
+    if (u.hostname.endsWith('imagedelivery.net') || u.hostname.endsWith('cdn.spectrmod.com')) {
+      const parts = u.pathname.split('/').filter(Boolean)
+      if (parts.length >= 2) return parts[1]
+    }
+  } catch {}
+  return input
+}
+
+async function deleteCloudflareImageById(id: string): Promise<void> {
+  try {
+    if (!ENV.CLOUDFLARE_API_TOKEN || !ENV.CLOUDFLARE_ACCOUNT_ID) return
+    const url = `https://api.cloudflare.com/client/v4/accounts/${ENV.CLOUDFLARE_ACCOUNT_ID}/images/v1/${encodeURIComponent(id)}`
+    await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${ENV.CLOUDFLARE_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    })
+  } catch (e) {
+    console.error('[MODERATION] Failed to delete Cloudflare image', id, e)
+  }
+}
 
 // Функция для отправки уведомлений пользователям через бота
 async function sendModerationNotification(userId: bigint, status: string, reason?: string, isBanned = false) {
@@ -90,6 +119,7 @@ router.get('/items', requireModerator, async (req: express.Request, res: express
         user: {
           select: {
             telegramId: true,
+              username: true,
             firstName: true,
             lastName: true
           }
@@ -325,15 +355,7 @@ router.post('/item/status', requireModerator, async (req: express.Request, res: 
         })
 
         // Пытаемся удалить файлы из CDN (вне транзакции)
-        for (const p of photosToDelete) {
-          try {
-            const url = p.url || ''
-            const filename = url.split('/').pop() || ''
-            deleteCdnFileByFilename(filename)
-          } catch (e) {
-            console.warn('Failed to delete CDN file for rejected profile:', e)
-          }
-        }
+        // Photos are stored as Cloudflare image IDs now; deletion handled via admin tools if needed
 
         console.log(`[MODERATION] Rejected without ban: deleted profile and photos for user ${item.userId}`)
       }
@@ -347,14 +369,7 @@ router.post('/item/status', requireModerator, async (req: express.Request, res: 
             select: { url: true }
           })
           await prisma.photo.delete({ where: { id: payload.photoId } })
-          // Удаляем файл из CDN (best-effort)
-          try {
-            const url = photo?.url || ''
-            const filename = url.split('/').pop() || ''
-            deleteCdnFileByFilename(filename)
-          } catch (e) {
-            console.warn('Failed to delete CDN file for rejected photo:', e)
-          }
+          // Files are managed by Cloudflare Images; no local file deletion required
         }
       }
     }
@@ -405,14 +420,54 @@ router.post('/item/status', requireModerator, async (req: express.Request, res: 
           console.log(`Profile data applied successfully for user ${item.userId}`)
         }
 
-        // Для фотографий обновляем статус фото
+        // Для фотографий применяем новый набор фото и удаляем старые из Cloudflare
         if (item.type === 'PHOTOS') {
           const payload = item.payload as any
-          if (payload.photoId) {
+          const list = Array.isArray(payload?.photos)
+            ? payload.photos as Array<{ url: string; position?: number }>
+            : []
+
+          // Нормализуем id и сортируем по position, если есть
+          const normalizedNewIds = list
+            .map((p, idx) => ({ id: extractCloudflareImageId(p.url), pos: Number.isFinite(p.position) ? p.position as number : idx }))
+            .sort((a, b) => a.pos - b.pos)
+            .map(p => p.id)
+
+          // Если payload старого формата (photoId) — просто одобряем одно фото
+          if (normalizedNewIds.length === 0 && payload?.photoId) {
             await prisma.photo.update({
               where: { id: payload.photoId },
               data: { status: 'APPROVED', note: null }
             })
+          } else if (normalizedNewIds.length > 0) {
+            // Получаем текущие id фотографий пользователя
+            const existing = await prisma.photo.findMany({ where: { userId: item.userId }, select: { url: true } })
+            const existingIds = new Set(existing.map(p => p.url))
+            const newIdsSet = new Set(normalizedNewIds)
+            const toRemove = [...existingIds].filter(id => !newIdsSet.has(id))
+
+            // Применяем замену атомарно
+            await prisma.$transaction(async (tx) => {
+              await tx.photo.deleteMany({ where: { userId: item.userId } })
+              if (normalizedNewIds.length > 0) {
+                await tx.photo.createMany({
+                  data: normalizedNewIds.map((id, i) => ({
+                    userId: item.userId,
+                    url: id,
+                    position: i,
+                    status: 'APPROVED',
+                    note: null
+                  })),
+                  skipDuplicates: true,
+                })
+              }
+            })
+
+            // Удаляем физически старые изображения из Cloudflare (в фоне)
+            for (const id of toRemove) {
+              // Fire and forget
+              void deleteCloudflareImageById(id)
+            }
           }
         }
       } catch (e) {

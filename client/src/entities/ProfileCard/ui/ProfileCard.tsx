@@ -5,7 +5,7 @@ import { FaVenusMars, FaRuler, FaMagic, FaHeart, FaTimes, FaEdit, FaWeight, FaFl
 
 import { patchMyProfile, GenderEnum, reportProfile, ReportReasonEnum } from '@/shared/api/profile'
 import { uploadImage } from '@/shared/api/cdn'
-import { compressImageToJpeg } from '@/shared/lib/image'
+import { compressImageToJpeg, cfImage } from '@/shared/lib/image'
 import BottomSheet from '@/shared/ui/BottomSheet/BottomSheet'
 import { toast } from 'sonner'
 
@@ -91,7 +91,7 @@ function SortablePhotoItem({ id, photo, index, isUploading, onReplace }: Sortabl
           </div>
         ) : photo ? (
           <>
-            <img src={photo} alt={`Фото ${index + 1}`} className="h-full w-full object-cover" />
+            <img src={cfImage(photo, { width: 480, quality: 85, format: 'auto' })} alt={`Фото ${index + 1}`} className="h-full w-full object-cover" />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
               <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-medium">
                 Заменить
@@ -115,7 +115,8 @@ export const ProfileCardSchema = z.object({
   displayName: z.string().nullable(),
   age: z.number().int().min(1).max(120).nullable(),
   city: z.string().nullable(),
-  photos: z.array(z.string().url()).min(0),
+  // Принимаем как полные URL, так и Cloudflare image_id — cfImage соберёт финальный URL
+  photos: z.array(z.string().min(1)).min(0),
   bio: z.string().nullable(),
   heightCm: z.number().int().min(100).max(250).nullable().optional(),
   weightKg: z.number().int().min(20).max(400).nullable().optional(),
@@ -130,6 +131,7 @@ interface Props {
   onDislike: () => void
   isEditable?: boolean
   onProfileUpdate?: (updatedData: ProfileCardData) => void
+  showActions?: boolean
 }
 
 interface ImageState {
@@ -144,7 +146,7 @@ interface SwipeState {
   isDragging: boolean
 }
 
-export default function ProfileCard({ data, onLike, onDislike, isEditable = false, onProfileUpdate }: Props): JSX.Element {
+export default function ProfileCard({ data, onLike, onDislike, isEditable = false, onProfileUpdate, showActions = true }: Props): JSX.Element {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
   const [imageStates, setImageStates] = useState<ImageState[]>([])
   const [showAllTags, setShowAllTags] = useState(false)
@@ -891,7 +893,7 @@ export default function ProfileCard({ data, onLike, onDislike, isEditable = fals
                 {data.photos.map((photoUrl, index) => (
                   <div key={photoUrl + index} className="w-full h-full flex-shrink-0 relative">
                     <img
-                      src={photoUrl}
+                      src={cfImage(photoUrl, { width: 1080, quality: 85, format: 'auto' })}
                       alt={title}
                       className={`w-full h-full object-cover transition-opacity duration-300 ${
                         imageStates[index]?.loaded || !imageStates[index]?.loading ? 'opacity-100' : 'opacity-0'
@@ -1122,8 +1124,8 @@ export default function ProfileCard({ data, onLike, onDislike, isEditable = fals
             </div>
           )}
 
-          {/* Кнопки действий */}
-          {!isEditable && (
+        {/* Кнопки действий */}
+        {showActions && !isEditable && (
             <div className="mt-5 mb-1 flex items-center justify-center gap-8">
               <button
                 className="w-14 h-14 rounded-full flex items-center justify-center text-white bg-white/15 hover:bg-white/25 border border-white/30 transition-all duration-200 hover:scale-110 backdrop-blur-sm"
@@ -1215,7 +1217,7 @@ export default function ProfileCard({ data, onLike, onDislike, isEditable = fals
                                     toast.error('Ошибка обработки изображения. Попробуйте другое фото.')
                                     return
                                   }
-                                  const up = await uploadImage(input)
+                                  const up = await uploadImage(input, { variant: 'profile' })
                                   if (!up.ok) throw new Error(up.message || 'Не удалось загрузить')
 
                                   // Заменяем фото по индексу

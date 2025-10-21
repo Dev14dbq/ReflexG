@@ -50,8 +50,11 @@ export default function DesktopTopBar({ onToggleSidebar, sidebarCollapsed }: Des
               <img
                 src="/bow.png"
                 alt=""
-                className="inline w-3 h-auto ml-1"
-                style={{ transform: 'rotate(18deg)' }}
+              width={12}
+              loading="eager"
+              decoding="async"
+              className="inline ml-1 align-[0.1em]"
+              style={{ transform: 'rotate(18deg)' }}
               />
             </h1>
           </button>

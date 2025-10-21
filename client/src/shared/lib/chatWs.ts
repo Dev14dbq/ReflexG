@@ -47,3 +47,4 @@ export type ChatEventType =
   | 'chatDeleted'
   | 'chatUpdated'
   | 'newMessage'
+  | 'presenceSnapshot'

@@ -280,7 +280,7 @@ export default function ProfilePage(): JSX.Element {
 
   return (
     <>
-    <div className="max-w-md mx-auto min-h-screen bg-[var(--color-bg)] pb-20">
+    <div className="max-w-md mx-auto min-h-full bg-[var(--color-bg)] pb-8">
       {/* Заголовок с градиентом */}
       <div className="relative">
         <div className="h-32 bg-gradient-to-b from-[var(--color-accent)] via-[color-mix(in_oklab,var(--color-accent)70%,var(--color-bg)30%)] to-transparent"></div>

@@ -26,6 +26,9 @@ export function useChatWebSocket({
     const eventData = envelope.data as ChatEvent
     
     switch (eventType) {
+      case 'presenceSnapshot':
+        // noop: отдельная обработка может быть реализована в компоненте
+        break
       case 'userOnline':
       case 'userOffline':
         onUserOnlineStatusChange?.(eventData as ChatUserOnlineEvent)
@@ -48,7 +51,8 @@ export function useChatWebSocket({
         break
         
       default:
-        console.warn('Unknown chat event type:', eventType)
+        // Игнорируем неизвестные события без варнинга, чтобы не шуметь
+        // console.warn('Unknown chat event type:', eventType)
     }
   }, [onUserOnlineStatusChange, onChatCreated, onChatDeleted, onChatUpdated, onNewMessage])
   

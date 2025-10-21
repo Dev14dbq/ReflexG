@@ -1,4 +1,4 @@
-export type WsEnvelope<T = unknown> = {
+export type WsEnvelope<T = any> = {
   ch: 'messages' | 'likes' | 'explore' | 'profile' | 'moderation' | 'chats'
   t: string
   data?: T

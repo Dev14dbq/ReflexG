@@ -161,7 +161,7 @@ export default function LikesPage(): JSX.Element {
   })
 
   return (
-    <div className="p-4 max-w-md mx-auto">
+    <div className="h-full p-4 max-w-md mx-auto">
       {error && error !== 'Лайков больше нет' ? (
         <div className="text-sm text-red-500 mb-2">
           {error}

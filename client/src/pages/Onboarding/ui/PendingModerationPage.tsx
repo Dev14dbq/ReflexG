@@ -38,7 +38,7 @@ export default function PendingModerationPage(): JSX.Element {
             style={{ background: 'transparent', justifyContent: 'flex-start' }}
           >
             <img
-              src="https://cdn.spectrmod.ru/Spectr.jpg"
+              src="https://cdn.spectrmod.com/tiG5wLsWR2QYY4sb4--BKw/f2aa1a15-74ba-45d0-52cd-7f8b5f130b00/avatar"
               alt="Spectr Okeano"
               width={28}
               height={28}

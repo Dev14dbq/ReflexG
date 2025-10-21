@@ -17,6 +17,7 @@ import { getProfileStatus, getUserInfo } from '@/shared/api/profile'
 import type { UserInfoResponse } from '@/shared/api/profile'
 import PageTransition from '@/shared/ui/PageTransition'
 import LikesNotification from '@/shared/components/LikesNotification'
+import { HEADER_HEIGHT_PX, BOTTOM_NAV_HEIGHT_PX } from '@/app/layout/constants'
 
 export function AppRouter(): JSX.Element {
   const {ready, isWebApp} = useTelegramAuth()
@@ -25,7 +26,7 @@ export function AppRouter(): JSX.Element {
   const [userInfo, setUserInfo] = useState<UserInfoResponse | null>(null)
 
   /* Массив со страницами где не требуется отображение нижней панели */
-  const BottomNavIgnore = ['/theme/*']
+  const BottomNavIgnore = ['/theme/*', '/messages/*']
 
     /* Подключение к WebSocket серверу */
     useEffect(() => {
@@ -96,23 +97,20 @@ export function AppRouter(): JSX.Element {
       return <DesktopLayout><DesktopRoutes /></DesktopLayout>
     }
     
-    // Для мобильных устройств используем старую раскладку
-    const bottomForMain = shouldHideBottomNav(pathname) ? '0px' : '80px'
+    // Для мобильных устройств используем раскладку с учётом фиксированных header/bottom nav
+    const showBottom = !shouldHideBottomNav(pathname)
+    const bottomForMain = showBottom ? `${BOTTOM_NAV_HEIGHT_PX}px` : '0px'
     return (
-      <div className="">{/* reserve space for bottom nav */}
+      <div className="">
         <HeaderSwitcher />
-        <main className="fixed left-0 right-0" style={{ top: '100px', bottom: bottomForMain, overflow: 'auto' }}>
+        <main className="fixed left-0 right-0" style={{ top: `${HEADER_HEIGHT_PX}px`, bottom: bottomForMain, overflow: 'auto' }}>
           <PageTransition>
             <div className="h-full">
               <MobileRoutes />
             </div>
           </PageTransition>
         </main>
-        
-        {/* Показываем соответствующее нижнее меню */}
         <BottomNavSwitcher />
-        
-        {/* Глобальные уведомления */}
         <LikesNotification />
       </div>
     )
@@ -122,7 +120,11 @@ export function AppRouter(): JSX.Element {
     const location = useLocation()
     const navigate = useNavigate()
     const p = location.pathname
-    const title = p === '/my-profile' ? 'Моя анкета' 
+    const title = p.startsWith('/u/') ? (() => {
+      // Профиль пользователя: заголовок "Профиль"
+      return 'Профиль'
+    })()
+      : p === '/my-profile' ? 'Моя анкета' 
       : p === '/help' ? 'Справка' 
       : p === '/privacy' ? 'Конфиденциальность' 
       : p === '/blacklist' ? 'Черный список'
@@ -136,7 +138,7 @@ export function AppRouter(): JSX.Element {
     // Telegram BackButton integration
     useEffect(() => {
       const webApp = window?.Telegram?.WebApp
-      const showBack = p === '/my-profile' || p === '/help' || p === '/privacy' || p === '/blacklist' || p === '/likes-history' || p === '/chat-settings' || p === '/recommendations' || p === '/notifications' || p === '/about-position'
+      const showBack = p.startsWith('/u/') || p === '/my-profile' || p === '/help' || p === '/privacy' || p === '/blacklist' || p === '/likes-history' || p === '/chat-settings' || p === '/recommendations' || p === '/notifications' || p === '/about-position'
       if (!webApp?.BackButton) return
       const onBack = () => navigate(-1)
       try {

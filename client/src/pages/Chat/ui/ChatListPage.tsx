@@ -1,9 +1,8 @@
 import type { JSX } from 'react'
-import { useState, useEffect } from 'react'
-import { NavLink } from 'react-router-dom'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { RiRefreshLine, RiMessage3Line, RiHeartLine } from 'react-icons/ri'
-import Lottie from 'lottie-react'
-import chatAnim from '@/assets/chat.json'
+ 
 
 import { fetchChats, type ChatListItem, fetchArchiveData, fetchUsersOnlineStatus, markAllMessagesRead } from '@/shared/api/chat'
 import { chatStore } from '@/shared/lib/chatStore'
@@ -17,6 +16,7 @@ export default function ChatListPage(): JSX.Element {
   const [isLoading, setIsLoading] = useState(false)
   const [isInitialLoading, setIsInitialLoading] = useState(false)
   const [errorState, setErrorState] = useState<string | null>(null)
+  const navigate = useNavigate()
   
   // Состояние архива
   const [archiveData, setArchiveData] = useState<{
@@ -25,16 +25,7 @@ export default function ChatListPage(): JSX.Element {
   } | null>(null)
 
   // Состояние для swipe-жестов
-  const [swipeState, setSwipeState] = useState<{
-    chatId: string | null
-    translateX: number
-    isSwipeActive: boolean
-  }>({
-    chatId: null,
-    translateX: 0,
-    isSwipeActive: false
-  })
-  const [touchStartX, setTouchStartX] = useState<number | null>(null)
+  // Убрали свайпы для простого вертикального скролла
   const [lotteryAnimation, setLotteryAnimation] = useState<{
     chatId: string | null
     isAnimating: boolean
@@ -45,6 +36,9 @@ export default function ChatListPage(): JSX.Element {
   
   // Состояние для плавного возврата
   const [isReturning, setIsReturning] = useState(false)
+  const subscribedIdsRef = useRef<Set<string>>(new Set())
+  const peerMapRef = useRef<Map<string, string>>(new Map())
+  const inflightChatInfoRef = useRef<Set<string>>(new Set())
 
   /* Загрузка данных архива */
   async function loadArchiveData(): Promise<void> {
@@ -75,17 +69,17 @@ export default function ChatListPage(): JSX.Element {
       const telegramInitData = window?.Telegram?.WebApp?.initData || ''
       const response = await fetchUsersOnlineStatus(telegramInitData, chatIds)
       
-      // Обновляем онлайн статус в списке чатов
+      // Обновляем онлайн статус в списке чатов (не затираем true, полученный по WS)
       setThemeList(prev => prev.map(chat => {
         const userStatus = response.users.find(user => user.chatId === chat.id)
-        if (userStatus) {
-          return { 
-            ...chat, 
-            isOnline: userStatus.isOnline, 
-            lastSeen: userStatus.lastSeen || undefined 
-          } as ChatListItem
-        }
-        return chat
+        if (!userStatus) return chat
+        const mergedOnline = chat.isOnline ? true : !!userStatus.isOnline
+        const mergedLastSeen = userStatus.lastSeen || chat.lastSeen
+        return { 
+          ...chat, 
+          isOnline: mergedOnline, 
+          lastSeen: mergedLastSeen 
+        } as ChatListItem
       }))
       
       // Логирование для отладки (можно раскомментировать при необходимости)
@@ -170,40 +164,49 @@ export default function ChatListPage(): JSX.Element {
     return unsubscribe
   }, [])
 
-  /* WS: подключение и подписка на presence для всех чатов списка */
+  /* WS: единоразовое подключение */
   useEffect(() => {
     const initData = window?.Telegram?.WebApp?.initData || ''
-    if (!initData) return
+    if (initData) wsClient.connect(initData)
+  }, [])
 
-    // Ensure WS connection
-    wsClient.connect(initData)
-
-    // After connected (or immediately if already), subscribe to each chatId
-    const performSubscribe = () => {
-      const uniqueChatIds = Array.from(new Set(themeList.map(c => c.id)))
-      uniqueChatIds.forEach(chatId => {
-        wsClient.send({ ch: 'messages', t: 'subscribe', data: { chatId } })
-      })
-    }
-
-    if (wsClient.getConnectionState()) {
-      performSubscribe()
-    } else {
-      const off = wsClient.onOpen(() => {
-        performSubscribe()
-      })
-      // Cleanup on unmount
-      return () => { try { off() } catch {} }
-    }
-
-    // On unmount or themeList change, unsubscribe previous ids
-    return () => {
-      const uniqueChatIds = Array.from(new Set(themeList.map(c => c.id)))
-      uniqueChatIds.forEach(chatId => {
-        wsClient.send({ ch: 'messages', t: 'unsubscribe', data: { chatId } })
-      })
-    }
+  /* WS: подписка на сообщения по diff списку чатов (без ресабскрайба при каждом обновлении) */
+  const desiredIds = useMemo(() => {
+    return Array.from(new Set(themeList.map(c => c.id)))
   }, [themeList])
+
+  useEffect(() => {
+    const current = subscribedIdsRef.current
+    const desired = new Set(desiredIds)
+
+    // Подписаться на новые
+    for (const id of desired) {
+      if (!current.has(id)) {
+        wsClient.send({ ch: 'messages', t: 'subscribe', data: { chatId: id } })
+        current.add(id)
+      }
+    }
+
+    // Отписаться от удалённых
+    for (const id of Array.from(current)) {
+      if (!desired.has(id)) {
+        wsClient.send({ ch: 'messages', t: 'unsubscribe', data: { chatId: id } })
+        current.delete(id)
+      }
+    }
+
+    // Ничего не делаем при обновлении deps — отписку всех делаем только при размонтировании ниже
+  }, [desiredIds])
+
+  // Отписка от всех сообщений только при размонтировании компонента (а не при каждом обновлении списка)
+  useEffect(() => {
+    return () => {
+      for (const id of Array.from(subscribedIdsRef.current)) {
+        wsClient.send({ ch: 'messages', t: 'unsubscribe', data: { chatId: id } })
+      }
+      subscribedIdsRef.current.clear()
+    }
+  }, [])
 
   /* Форматирование даты или времени для отображения */
   function formatChatTimestamp(timestamp: string): string {    
@@ -260,72 +263,7 @@ export default function ChatListPage(): JSX.Element {
 
   /* Функции для обработки swipe-жестов */
   
-  function handleSwipeStart(chatId: string, clientX: number) {
-    setTouchStartX(clientX)
-    setSwipeState({
-      chatId,
-      translateX: 0,
-      isSwipeActive: true
-    })
-  }
-
-  function handleSwipeMove(chatId: string, clientX: number) {
-    if (swipeState.chatId !== chatId || !swipeState.isSwipeActive || touchStartX === null) return
-    
-    const deltaX = touchStartX - clientX // Свайп влево
-    const maxSwipe = 80 // Максимальное расстояние свайпа
-    const animationThreshold = 50 // Порог для начала анимации лотье
-    
-    if (deltaX > 0 && deltaX <= maxSwipe) {
-      setSwipeState(prev => ({
-        ...prev,
-        translateX: deltaX
-      }))
-      
-      // Запускаем анимацию лотье когда дотянул почти полностью
-      if (deltaX >= animationThreshold && !lotteryAnimation.isAnimating) {
-        setLotteryAnimation({
-          chatId,
-          isAnimating: true
-        })
-      } else if (deltaX < animationThreshold && lotteryAnimation.isAnimating) {
-        setLotteryAnimation({
-          chatId: null,
-          isAnimating: false
-        })
-      }
-    }
-  }
-
-  function handleSwipeEnd(chatId: string, clientX: number) {
-    if (swipeState.chatId !== chatId || !swipeState.isSwipeActive || touchStartX === null) return
-    
-    const deltaX = touchStartX - clientX // Свайп влево
-    const threshold = 60 // Порог для активации действия
-    
-    if (deltaX >= threshold) {
-      // Выполняем действие - отмечаем как лотье
-      void markAsLottery(chatId)
-    }
-    
-    // Запускаем плавный возврат
-    setIsReturning(true)
-    
-    // Сбрасываем состояние свайпа через небольшую задержку для плавности
-    setTimeout(() => {
-      setTouchStartX(null)
-      setSwipeState({
-        chatId: null,
-        translateX: 0,
-        isSwipeActive: false
-      })
-      setLotteryAnimation({
-        chatId: null,
-        isAnimating: false
-      })
-      setIsReturning(false)
-    }, 300) // 300ms для плавного возврата
-  }
+  // Все обработчики свайпов удалены
 
   async function markAsLottery(chatId: string) {
     try {
@@ -363,11 +301,10 @@ export default function ChatListPage(): JSX.Element {
 
   // WebSocket обработчики для обновления списка чатов в реальном времени
   const handleUserOnlineStatusChange = (event: any) => {
-    setThemeList(prev => prev.map(chat => 
-      chat.id === event.chatId 
-        ? { ...chat, isOnline: event.isOnline, lastSeen: event.lastSeen }
-        : chat
-    ))
+    setThemeList(prev => prev.map(chat => {
+      if (chat.id !== event.chatId) return chat
+      return { ...chat, isOnline: !!event.isOnline, lastSeen: event.lastSeen || chat.lastSeen } as ChatListItem
+    }))
   }
   const handlePresenceSnapshot = (event: any) => {
     const { chatId, presences } = event
@@ -404,8 +341,8 @@ export default function ChatListPage(): JSX.Element {
               last: event.message.text,
               time: event.message.createdAt
             },
-            unreadCount: chat.unreadCount + 1
-          }
+            unreadCount: Math.max(0, (chat.unreadCount || 0) + (event.unreadCountDelta ?? 1))
+          } as ChatListItem
         : chat
     ))
   }
@@ -425,6 +362,17 @@ export default function ChatListPage(): JSX.Element {
       if (msg.ch === 'chats' && msg.t === 'presenceSnapshot' && msg.data) {
         handlePresenceSnapshot(msg.data)
       }
+      // Захватываем chat_info, чтобы знать peerUserId для перехода в профиль
+      if (msg.ch === 'messages' && msg.t === 'chat_info' && msg.data) {
+        try {
+          const d: any = msg.data
+          const chatId: string | undefined = d?.id || d?.chatId
+          const peerUserId: string | undefined = d?.peerUserId || d?.peerId || d?.peer?.id || d?.userId
+          if (chatId && peerUserId) {
+            peerMapRef.current.set(chatId, String(peerUserId))
+          }
+        } catch {}
+      }
     })
     return off
   }, [])
@@ -432,16 +380,10 @@ export default function ChatListPage(): JSX.Element {
   // Подписка на канал chats при загрузке страницы
   useEffect(() => {
     const telegramInitData = window?.Telegram?.WebApp?.initData || ''
-    if (telegramInitData) {
-      // Подписываемся на канал chats
-      wsClient.send({ ch: 'chats', t: 'subscribe', data: {} })
-      console.log('[CHAT LIST] Subscribed to chats channel')
-      
-      return () => {
-        // Отписываемся при размонтировании
-        wsClient.send({ ch: 'chats', t: 'unsubscribe', data: {} })
-        console.log('[CHAT LIST] Unsubscribed from chats channel')
-      }
+    if (!telegramInitData) return
+    wsClient.send({ ch: 'chats', t: 'subscribe', data: {} })
+    return () => {
+      wsClient.send({ ch: 'chats', t: 'unsubscribe', data: {} })
     }
   }, [])
 
@@ -450,7 +392,7 @@ export default function ChatListPage(): JSX.Element {
   const showErrorState = errorState && themeList.length === 0
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)]">
+    <div className="h-full bg-[var(--color-bg)] flex flex-col">
       {/* Заголовок */}
       <div className="sticky top-0 z-10 bg-[var(--color-bg)] border-b border-[color-mix(in_oklab,var(--color-accent)10%,transparent)] px-4 py-4">
         <div className="flex items-center justify-between">
@@ -471,8 +413,8 @@ export default function ChatListPage(): JSX.Element {
         </div>
       </div>
 
-      {/* Основной контент */}
-      <div className="py-4 pb-20">
+      {/* Основной контент (прокручиваемая область) */}
+      <div className="flex-1 overflow-y-auto py-4 pb-8">
         {/* Состояние пустого списка */}
         {showEmptyState && (
           <div className="text-center py-16">
@@ -563,67 +505,28 @@ export default function ChatListPage(): JSX.Element {
 
           {/* Список чатов */}
           {themeList.map((chat, index) => {
-            const isSwipeActive = swipeState.chatId === chat.id && swipeState.isSwipeActive
-            const translateX = isSwipeActive ? swipeState.translateX : 0
             const isLastChat = index === themeList.length - 1
             
             return (
               <div key={chat.id}>
-                <div
-                  className="relative overflow-hidden"
-                >
-              {/* Цветной блок для swipe-действия (под карточкой) */}
-              <div 
-                className="absolute inset-0 bg-[var(--color-accent)] flex items-center justify-start pl-4"
-                style={{ 
-                  transform: `translateX(${Math.min(0, 80 - translateX)}px)`,
-                  opacity: translateX > 20 ? Math.min(1, (translateX - 20) / 40) : 0
-                }}
-              >
-                <div className="relative w-full h-full">
-                  {lotteryAnimation.chatId === chat.id && lotteryAnimation.isAnimating && (
-                    <div 
-                      className="absolute"
-                      style={{ 
-                        right: '25px', // pr-4 = 16px
-                        top: '50%',
-                        transform: 'translateY(-50%)'
-                      }}
-                    >
-                      <Lottie 
-                        animationData={chatAnim} 
-                        autoplay 
-                        loop={false}
-                        style={{ width: 28, height: 28 }} 
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-              
               {/* Основной контент чата с фоном */}
               <div
-                className="flex items-center gap-3 py-3 bg-[var(--color-bg)] hover:bg-[color-mix(in_oklab,var(--color-bg)95%,var(--color-accent)5%)] transition-all duration-300 ease-out cursor-pointer relative z-10"
-                style={{ transform: `translateX(-${translateX}px)` }}
+                className="flex items-center gap-3 py-3 bg-[var(--color-bg)] hover:bg-[color-mix(in_oklab,var(--color-bg)95%,var(--color-accent)5%)] transition-colors cursor-pointer"
+                style={{ touchAction: 'pan-y' }}
                 onClick={() => {
-                  // TODO: Добавить функциональность открытия чата
-                  console.log('Chat clicked:', chat.id)
-                }}
-                onTouchStart={(e) => {
-                  const touch = e.touches[0]
-                  if (touch) handleSwipeStart(chat.id, touch.clientX)
-                }}
-                onTouchMove={(e) => {
-                  const touch = e.touches[0]
-                  if (touch) handleSwipeMove(chat.id, touch.clientX)
-                }}
-                onTouchEnd={(e) => {
-                  const touch = e.changedTouches[0]
-                  if (touch) handleSwipeEnd(chat.id, touch.clientX)
+                  navigate(`/messages/${encodeURIComponent(chat.id)}`)
                 }}
               >
             {/* Аватар пользователя */}
-            <div className="w-12 h-12 rounded-full flex items-center justify-center relative ml-4">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center relative ml-4" onClick={(e) => {
+              e.stopPropagation()
+              const go = (uid: string) => navigate(`/u/${encodeURIComponent(uid)}`)
+              if (chat.peerUserId) { go(chat.peerUserId); return }
+              const mapped = peerMapRef.current.get(chat.id)
+              if (mapped) { go(mapped); return }
+              // Быстрый путь: открываем по chatId-роуту, страница сама запросит peerUserId и профиль
+              navigate(`/u/by-chat/${encodeURIComponent(chat.id)}`)
+            }}>
               {chat.avatarUrl ? (
                 <img 
                   src={chat.avatarUrl} 
@@ -673,7 +576,6 @@ export default function ChatListPage(): JSX.Element {
                 )}
               </p>
             </div>
-              </div>
             </div>
             
             {/* Разделительная линия между чатами */}

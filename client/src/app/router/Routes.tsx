@@ -17,17 +17,22 @@ import NotificationsPage from '@/pages/Notifications'
 import AboutPositionPage from '@/pages/AboutPosition'
 import { AdminPage, ModerationPage, UsersPage } from '@/pages/Admin'
 import ChatListPage from '@/pages/Chat/ui/ChatListPage'
+import ProfileViewPage from '@/pages/ProfileView/ui/ProfileViewPage'
+import MessagesPage from '@/pages/Messages/ui/MessagesPage'
 
 export function MobileRoutes(): JSX.Element {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/explore" replace />} />
       <Route path="/chat" element={<ChatListPage />} />
+      <Route path="/messages/:chatId" element={<MessagesPage />} />
       <Route path="/likes" element={<LikesPage />} />
       <Route path="/likes-history" element={<LikesHistoryPage />} />
       <Route path="/explore" element={<ExplorePage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/my-profile" element={<MyProfilePage />} />
+      <Route path="/u/:userId" element={<ProfileViewPage />} />
+      <Route path="/u/by-chat/:chatId" element={<ProfileViewPage />} />
       <Route path="/help" element={<HelpPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/blacklist" element={<BlacklistPage />} />
@@ -35,12 +40,10 @@ export function MobileRoutes(): JSX.Element {
       <Route path="/recommendations" element={<RecommendationsPage />} />
       <Route path="/notifications" element={<NotificationsPage />} />
       <Route path="/about-position" element={<AboutPositionPage />} />
-      
       {/* Админские роуты - всегда доступны, но защищены внутри компонентов */}
       <Route path="/admin" element={<AdminPage />} />
       <Route path="/admin/moderation" element={<ModerationPage />} />
       <Route path="/admin/users" element={<UsersPage />} />
-      
       <Route path="*" element={<Navigate to="/explore" replace />} />
     </Routes>
   )
@@ -51,11 +54,14 @@ export function DesktopRoutes(): JSX.Element {
     <Routes>
       <Route path="/" element={<Navigate to="/explore" replace />} />
       <Route path="/chat" element={<ChatListPage />} />
+      <Route path="/messages/:chatId" element={<MessagesPage />} />
       <Route path="/likes" element={<LikesPage />} />
       <Route path="/likes-history" element={<LikesHistoryPage />} />
       <Route path="/explore" element={<ExplorePage />} />
       <Route path="/profile" element={<DesktopProfilePage />} />
       <Route path="/my-profile" element={<DesktopMyProfilePage />} />
+      <Route path="/u/:userId" element={<ProfileViewPage />} />
+      <Route path="/u/by-chat/:chatId" element={<ProfileViewPage />} />
       <Route path="/help" element={<HelpPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/blacklist" element={<BlacklistPage />} />
@@ -63,12 +69,10 @@ export function DesktopRoutes(): JSX.Element {
       <Route path="/recommendations" element={<RecommendationsPage />} />
       <Route path="/notifications" element={<NotificationsPage />} />
       <Route path="/about-position" element={<AboutPositionPage />} />
-      
       {/* Админские роуты - всегда доступны, но защищены внутри компонентов */}
       <Route path="/admin" element={<AdminPage />} />
       <Route path="/admin/moderation" element={<ModerationPage />} />
       <Route path="/admin/users" element={<UsersPage />} />
-      
       <Route path="*" element={<Navigate to="/explore" replace />} />
     </Routes>
   )
